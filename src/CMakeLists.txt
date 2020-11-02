@@ -8,8 +8,18 @@ set(c_8_DA_defs ${c_8_defs})
 # Create the bvers.f file with the version from VERSION file.
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bvers.f.in ${CMAKE_CURRENT_BINARY_DIR}/bvers.f @ONLY)
 
-# Extract BUFRLIB parameters
-file(READ bufrlib.inc _bufrlib_prm_str)
+# Set BUFRLIB parameters
+set(MAXNC 600)
+set(MXNAF 3)
+
+# Cause cmake to include current build directory.
+SET(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+# Create the bufrlib.inc file.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bufrlib.inc.in ${CMAKE_CURRENT_BINARY_DIR}/bufrlib.inc @ONLY)
+
+# What is this doing?
+file(READ ${CMAKE_CURRENT_BINARY_DIR}/bufrlib.inc _bufrlib_prm_str)
 foreach(_var IN ITEMS MAXNC MXNAF)
     if(_bufrlib_prm_str MATCHES "${_var} = ([0-9]+)")
       list(APPEND c_defs ${_var}=${CMAKE_MATCH_1})
