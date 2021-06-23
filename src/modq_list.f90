@@ -121,7 +121,7 @@ module modq_list
 
       if(associated(self%values)) then
         tmp(1:self%size) = self%values(1:self%size)
-        deallocate(self%values)
+        !deallocate(self%values)
         self%values => null()
       end if
 
@@ -132,7 +132,7 @@ module modq_list
       class(IntList), intent(inout) :: self
 
       if (associated(self%values)) then
-        deallocate(self%values)
+        !deallocate(self%values)
         self%values => null()
       end if
     end subroutine int_list__delete
@@ -142,7 +142,7 @@ module modq_list
       type(IntList), intent(inout) :: self
 
       if (associated(self%values)) then
-        deallocate(self%values)
+        !deallocate(self%values)
         self%values => null()
       end if
     end subroutine int_list__final

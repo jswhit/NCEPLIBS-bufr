@@ -236,6 +236,8 @@ contains
     type(SeqCounter) :: seq_counter
     type(Target) :: targ
 
+    data_frame = DataFrame()
+
     do target_idx = 1, size(targets)
       targ = targets(target_idx)
       

@@ -38,6 +38,8 @@ module modq_result_set
   contains
     procedure :: add => data_frame__add
     procedure :: field_for_node_named => data_frame__field_for_node_named
+    procedure, pass(self) :: data_frame__copy
+    generic, public :: assignment(=) => data_frame__copy
     final ::  data_frame__delete
   end type
 
@@ -99,17 +101,26 @@ contains
 
   type(DataFrame) function initialize__data_frame() result(data_frame)
     data_frame = DataFrame(null())  ! Needed because of gfortran bug
+    allocate(data_frame%data_fields(0))
   end function initialize__data_frame
 !
   subroutine data_frame__add(self, data_field)
     class(DataFrame), intent(inout) :: self
     type(DataField), intent(in) :: data_field
 
+    type(DataField), allocatable :: tmp_data_fields(:)
+
     if (.not. allocated(self%data_fields)) then
       allocate(self%data_fields(0))
     end if
 
-    self%data_fields = [self%data_fields, data_field]
+   allocate(tmp_data_fields(size(self%data_fields) + 1))
+   tmp_data_fields(1:size(self%data_fields)) = self%data_fields(1:size(self%data_fields))
+   tmp_data_fields(size(tmp_data_fields)) = data_field
+   deallocate(self%data_fields)
+   call move_alloc(tmp_data_fields, self%data_fields) 
+
+!    self%data_fields = [self%data_fields, data_field]
 
   end subroutine data_frame__add
 
@@ -135,6 +146,20 @@ contains
       call bort("Using unknown field named " // name%chars())
     end if
   end function data_frame__field_for_node_named
+
+
+  subroutine data_frame__copy(self, other)
+    class(DataFrame), intent(inout) :: self
+    class(DataFrame), intent(in) :: other
+
+    !if (allocated(self%data_fields)) then
+    !  deallocate(self%data_fields)
+    !end if
+
+    if (allocated(other%data_fields)) then
+      allocate(self%data_fields, source=other%data_fields)
+    end if
+  end subroutine
 
 
   subroutine data_frame__delete(self)
@@ -269,6 +294,7 @@ contains
     integer :: field_idx, name_idx
     logical :: name_found
     type(DataField) :: field
+    type(DataFrame), allocatable :: tmp_data_frames(:)
 
     if (.not. allocated(self%data_frames)) then
       allocate(self%data_frames(0))
@@ -290,7 +316,11 @@ contains
       end if
     end do
 
-    self%data_frames = [self%data_frames, data_frame]
+    self%data_frames = [self%data_frames, data_frame] 
+   
+    print *, size(self%data_frames)
+    print *, "AAAAAAAA" 
+    !call move_alloc(tmp_data_frames, self%data_frames)
 
   end subroutine result_set__add
 
