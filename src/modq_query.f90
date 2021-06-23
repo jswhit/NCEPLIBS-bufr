@@ -254,10 +254,10 @@ contains
         dat(1) = MissingValue
 
         data_field = DataField()
-        data_field%name = String(targ%name)
-        data_field%query_str = String(targ%query_str)
-        data_field%data = dat
-        data_field%missing = .true.
+!        data_field%name = String(targ%name)
+!        data_field%query_str = String(targ%query_str)
+!        data_field%data = dat
+!        data_field%missing = .true.
         call data_frame%add(data_field)
         cycle
       end if
@@ -311,15 +311,15 @@ contains
       end do
 
       data_field = DataField()
-      data_field%name = String(targ%name)
-      data_field%query_str = String(targ%query_str)
-      data_field%data = dat
+!      data_field%name = String(targ%name)
+!      data_field%query_str = String(targ%query_str)
+!      data_field%data = dat
 
-      if (allocated(data_field%seq_path)) then
-        deallocate(data_field%seq_path)
-      end if
+!      if (allocated(data_field%seq_path)) then
+!        deallocate(data_field%seq_path)
+!      end if
 
-      allocate(data_field%seq_path, source=seq_counter%seqs%array())
+!      allocate(data_field%seq_path, source=seq_counter%seqs%array())
 
 !      if (allocated(data_field%seq_counts)) then
 !        deallocate(data_field%seq_counts)

@@ -17,11 +17,11 @@ module modq_result_set
   end interface SeqCounts
 
   type, public :: DataField
-    type(String) :: name
-    type(String) :: query_str
-    logical :: missing = .false.
-    real(kind=8), allocatable :: data(:)
-    integer, allocatable :: seq_path(:)
+!    type(String) :: name
+!    type(String) :: query_str
+!    logical :: missing = .false.
+!    real(kind=8), allocatable :: data(:)
+!    integer, allocatable :: seq_path(:)
 !    type(SeqCounts), allocatable :: seq_counts(:)
 
   contains
@@ -74,22 +74,22 @@ contains
   ! Data Field Procedures
   type(DataField) function initialize__data_field() result(data_field)
     ! Needed because of gfortran bug
-    data_field = DataField(String(""), String(""), .false., null(), null())
+!    data_field = DataField()
 
-    allocate(data_field%data(0))
-    allocate(data_field%seq_path(0))
+!    allocate(data_field%data(0))
+!    allocate(data_field%seq_path(0))
   end function initialize__data_field
 
   subroutine data_field__delete(self)
     type(DataField), intent(inout) :: self
 
-    if (allocated(self%data)) then
-      deallocate(self%data)
-    end if
-
-    if (allocated(self%seq_path)) then
-      deallocate(self%seq_path)
-    end if
+!    if (allocated(self%data)) then
+!      deallocate(self%data)
+!    end if
+!
+!    if (allocated(self%seq_path)) then
+!      deallocate(self%seq_path)
+!    end if
 
 !    if (allocated(self%seq_counts)) then
 !      deallocate(self%seq_counts)
@@ -133,18 +133,20 @@ contains
     logical :: field_found
     type(DataField), allocatable :: field
 
-    field_found = .false.
-    do field_idx = 1, size(self%data_fields)
-      if (self%data_fields(field_idx)%name == name) then
-        field = self%data_fields(field_idx)
-        field_found = .true.
-        exit
-      end if
-    end do
+    field = self%data_fields(1)
 
-    if (.not. field_found) then
-      call bort("Using unknown field named " // name%chars())
-    end if
+!    field_found = .false.
+!    do field_idx = 1, size(self%data_fields)
+!      if (self%data_fields(field_idx)%name == name) then
+!        field = self%data_fields(field_idx)
+!        field_found = .true.
+!        exit
+!      end if
+!    end do
+!
+!    if (.not. field_found) then
+!      call bort("Using unknown field named " // name%chars())
+!    end if
   end function data_frame__field_for_node_named
 
 
@@ -199,35 +201,35 @@ contains
       df = self%data_frames(frame_idx)
       target_field = df%field_for_node_named(String(field_name))
 
-      if (.not. target_field%missing) then
-        if (present(for)) then
-          for_field = self%data_frames(frame_idx)%field_for_node_named(String(for))
-          rep_counts = self%rep_counts(target_field, for_field)
-
-          allocate(field_data(sum(rep_counts)))
-
-          do data_idx = 1, size(rep_counts)
-            do rep_idx = 1, rep_counts(data_idx)
-              field_data(sum(rep_counts(1:data_idx - 1)) + rep_idx) = target_field%data(data_idx)
-            end do
-          end do
-
-          data = [data, field_data]
-          deallocate(field_data)
-        else
-          data = [data, target_field%data]
-        end if
-      else
-        if (present(for)) then
-          for_field = self%data_frames(frame_idx)%field_for_node_named(String(for))
-          allocate(field_data(size(for_field%data)))
-          field_data = MissingValue
-          data = [data, field_data]
-          deallocate(field_data)
-        else
-          data = [data, real(MissingValue, 8)]
-        end if
-      end if
+!      if (.not. target_field%missing) then
+!        if (present(for)) then
+!          for_field = self%data_frames(frame_idx)%field_for_node_named(String(for))
+!          rep_counts = self%rep_counts(target_field, for_field)
+!
+!          allocate(field_data(sum(rep_counts)))
+!
+!          do data_idx = 1, size(rep_counts)
+!            do rep_idx = 1, rep_counts(data_idx)
+!              field_data(sum(rep_counts(1:data_idx - 1)) + rep_idx) = target_field%data(data_idx)
+!            end do
+!          end do
+!
+!          data = [data, field_data]
+!          deallocate(field_data)
+!        else
+!          data = [data, target_field%data]
+!        end if
+!      else
+!        if (present(for)) then
+!          for_field = self%data_frames(frame_idx)%field_for_node_named(String(for))
+!          allocate(field_data(size(for_field%data)))
+!          field_data = MissingValue
+!          data = [data, field_data]
+!          deallocate(field_data)
+!        else
+!          data = [data, real(MissingValue, 8)]
+!        end if
+!      end if
     end do
   end function
 
@@ -241,12 +243,12 @@ contains
     integer :: target_count
     integer :: count
 
-    do seq_idx = 1, size(target_field%seq_path)
-      if (target_field%seq_path(seq_idx) /= for_field%seq_path(seq_idx)) then
-        call bort("The target field " // target_field%name%chars() // " and the for field " &
-                  // for_field%name%chars() // " don't occur along the same path.")
-      end if
-    end do
+!    do seq_idx = 1, size(target_field%seq_path)
+!      if (target_field%seq_path(seq_idx) /= for_field%seq_path(seq_idx)) then
+!        call bort("The target field " // target_field%name%chars() // " and the for field " &
+!                  // for_field%name%chars() // " don't occur along the same path.")
+!      end if
+!    end do
 
     allocate(counts(0))
     target_count =  2!sum(target_field%seq_counts(size(target_field%seq_counts))%counts)
@@ -274,17 +276,17 @@ contains
     integer :: cnt_idx
 
     count = 0
-    if (seq_idx == size(for_field%seq_path)) then
-!      count = sum(for_field%seq_counts(seq_idx)%counts(offset + 1:offset + last_count))
-    else
-!      seq_counts => for_field%seq_counts(seq_idx)%counts
-!      do cnt_idx = offset + 1, offset + last_count
-!        count = count + self%get_counts(for_field, &
-!                                        seq_idx + 1, &
-!                                        seq_counts(cnt_idx), &
-!                                        sum(seq_counts(1:cnt_idx - 1)))
-!      end do
-    end if
+!    if (seq_idx == size(for_field%seq_path)) then
+!!      count = sum(for_field%seq_counts(seq_idx)%counts(offset + 1:offset + last_count))
+!    else
+!!      seq_counts => for_field%seq_counts(seq_idx)%counts
+!!      do cnt_idx = offset + 1, offset + last_count
+!!        count = count + self%get_counts(for_field, &
+!!                                        seq_idx + 1, &
+!!                                        seq_counts(cnt_idx), &
+!!                                        sum(seq_counts(1:cnt_idx - 1)))
+!!      end do
+!    end if
   end function result_set__get_counts
 
   subroutine result_set__add(self, data_frame)
@@ -303,17 +305,17 @@ contains
     do field_idx = 1, size(data_frame%data_fields)
       field = data_frame%data_fields(field_idx)
 
-      name_found = .false.
-      do name_idx = 1, size(self%names)
-        if (field%name == self%names(name_idx)) then
-          name_found = .true.
-          exit
-        end if
-      end do
-
-      if (.not. name_found) then
-        self%names = [self%names, field%name]
-      end if
+!      name_found = .false.
+!      do name_idx = 1, size(self%names)
+!        if (field%name == self%names(name_idx)) then
+!          name_found = .true.
+!          exit
+!        end if
+!      end do
+!
+!      if (.not. name_found) then
+!        self%names = [self%names, field%name]
+!      end if
     end do
 
     self%data_frames = [self%data_frames, data_frame] 
