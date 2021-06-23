@@ -101,7 +101,8 @@ subroutine test__query_gnssro
   type(QuerySet) :: query_set
   type(ResultSet) :: result_set
 
-  open(lunit, file="/scratch1/NCEPDEV/da/Ronald.McLaren/data/gdas.t00z.1bmhs.tm00.bufr_d")
+!  open(lunit, file="/scratch1/NCEPDEV/da/Ronald.McLaren/data/gdas.t00z.1bmhs.tm00.bufr_d")
+  open(lunit, file="/home/rmclaren/Work/ioda-bundle/ioda_converters/test/testinput/gdas.t18z.1bmhs.tm00.bufr_d")
   call openbf(lunit, "IN", lunit)
 
   call query_set%add("*/CLAT", "latitude")

@@ -321,14 +321,14 @@ contains
 
       allocate(data_field%seq_path, source=seq_counter%seqs%array())
 
-      if (allocated(data_field%seq_counts)) then
-        deallocate(data_field%seq_counts)
-      end if
+!      if (allocated(data_field%seq_counts)) then
+!        deallocate(data_field%seq_counts)
+!      end if
 
-      allocate(data_field%seq_counts(size(data_field%seq_path)))
-      do path_idx = 1, size(data_field%seq_path)
-        allocate(data_field%seq_counts(path_idx)%counts, source=seq_counter%counts_list(path_idx)%array())
-      end do
+!      allocate(data_field%seq_counts(size(data_field%seq_path)))
+!      do path_idx = 1, size(data_field%seq_path)
+!        allocate(data_field%seq_counts(path_idx)%counts, source=seq_counter%counts_list(path_idx)%array())
+!      end do
 
       call seq_counter%delete()
       call data_frame%add(data_field)

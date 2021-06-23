@@ -22,7 +22,7 @@ module modq_result_set
     logical :: missing = .false.
     real(kind=8), allocatable :: data(:)
     integer, allocatable :: seq_path(:)
-    type(SeqCounts), allocatable :: seq_counts(:)
+!    type(SeqCounts), allocatable :: seq_counts(:)
 
   contains
     final :: data_field__delete
@@ -74,7 +74,7 @@ contains
   ! Data Field Procedures
   type(DataField) function initialize__data_field() result(data_field)
     ! Needed because of gfortran bug
-    data_field = DataField(String(""), String(""), .false., null(), null(), null())
+    data_field = DataField(String(""), String(""), .false., null(), null())
 
     allocate(data_field%data(0))
     allocate(data_field%seq_path(0))
@@ -91,9 +91,9 @@ contains
       deallocate(self%seq_path)
     end if
 
-    if (allocated(self%seq_counts)) then
-      deallocate(self%seq_counts)
-    end if
+!    if (allocated(self%seq_counts)) then
+!      deallocate(self%seq_counts)
+!    end if
 
   end subroutine data_field__delete
 
@@ -249,15 +249,15 @@ contains
     end do
 
     allocate(counts(0))
-    target_count =  sum(target_field%seq_counts(size(target_field%seq_counts))%counts)
+    target_count =  2!sum(target_field%seq_counts(size(target_field%seq_counts))%counts)
     if (target_count > 1) then
       do rep_idx = 1, target_count
-        count = self%get_counts(for_field, &
-                                size(target_field%seq_counts) + 1, &
-                                1, &
-                                rep_idx - 1)
+!        count = self%get_counts(for_field, &
+!                                size(target_field%seq_counts) + 1, &
+!                                1, &
+!                                rep_idx - 1)
 
-        counts = [counts, count]
+        counts = [counts, 1]
       end do
     end if
   end function result_set__rep_counts
@@ -275,15 +275,15 @@ contains
 
     count = 0
     if (seq_idx == size(for_field%seq_path)) then
-      count = sum(for_field%seq_counts(seq_idx)%counts(offset + 1:offset + last_count))
+!      count = sum(for_field%seq_counts(seq_idx)%counts(offset + 1:offset + last_count))
     else
-      seq_counts => for_field%seq_counts(seq_idx)%counts
-      do cnt_idx = offset + 1, offset + last_count
-        count = count + self%get_counts(for_field, &
-                                        seq_idx + 1, &
-                                        seq_counts(cnt_idx), &
-                                        sum(seq_counts(1:cnt_idx - 1)))
-      end do
+!      seq_counts => for_field%seq_counts(seq_idx)%counts
+!      do cnt_idx = offset + 1, offset + last_count
+!        count = count + self%get_counts(for_field, &
+!                                        seq_idx + 1, &
+!                                        seq_counts(cnt_idx), &
+!                                        sum(seq_counts(1:cnt_idx - 1)))
+!      end do
     end if
   end function result_set__get_counts
 
