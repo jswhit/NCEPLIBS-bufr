@@ -81,22 +81,21 @@ module query_interface
   end subroutine result_set__allocate
 
 
-  subroutine result_set__get_raw_c(cls, field, group_by_field, data, dim_rows, dim_cols, dim_z) &
+  subroutine result_set__get_raw_c(cls, field, group_by_field, data, dims, num_dims) &
     bind(C, name="result_set__get_raw_f")
 
     type(c_ptr), intent(inout) :: cls
     character(kind=c_char, len=1), intent(in) :: field
     character(kind=c_char, len=1), intent(in) :: group_by_field
     type(c_ptr), intent(inout) :: data
-    integer(kind=c_int), intent(out) :: dim_rows
-    integer(kind=c_int), intent(out) :: dim_cols
-    integer(kind=c_int), intent(out) :: dim_z
-
+    type(c_ptr), allocatable, intent(inout) :: dims(:)
+    integer(kind=c_int), intent(out) :: num_dims
 
     character(len=:), allocatable :: f_field, f_group_by_field
-    real(kind=8), allocatable :: data_f(:, :, :)
-    real(kind=8), pointer :: data_f_ptr(:, :, :)
-    integer :: dims(3)
+    real(kind=8), allocatable :: data_f(:)
+    integer, allocatable :: dims_f(:)
+    real(kind=8), pointer :: data_f_ptr(:)
+    integer(kind=c_int), pointer :: dims_ptr(:)
 
     type(ResultSet), pointer :: result_set_fptr
     call c_f_pointer(cls, result_set_fptr)
@@ -104,26 +103,26 @@ module query_interface
     f_field = c_f_string(field)
     f_group_by_field = c_f_string(group_by_field)
 
-    data_f = result_set_fptr%get_raw_values(f_field, f_group_by_field)
+    call result_set_fptr%get_raw_values(f_field, data_f, dims_f, f_group_by_field)
 
-    dims = shape(data_f)
-    dim_rows = dims(1)
-    dim_cols = dims(2)
-    dim_z = dims(3)
-    if (dim_rows * dim_cols * dim_z > 0) then
+    num_dims = size(dims_f)
+
+    if (product(dims_f) > 0) then
       allocate(data_f_ptr, source=data_f)
-      data = c_loc(data_f_ptr(1, 1, 1))
+      allocate(dims_ptr, source=dims_f)
+      data = c_loc(data_f_ptr(1))
+      dims = c_loc(dims_ptr(1))
     end if
 
   end subroutine result_set__get_raw_c
 
 
-  type(logical) function result_set__is_string_c(cls, field) &
-    result(is_string) &
+  function result_set__is_string_c(cls, field) result(is_string) &
     bind(C, name="result_set__is_string_f")
     
     type(c_ptr), intent(inout) :: cls
     character(kind=c_char, len=1), intent(in) :: field
+    logical(kind=c_bool) :: is_string
 
     type(ResultSet), pointer :: result_set_fptr
 

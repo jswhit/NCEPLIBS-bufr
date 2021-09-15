@@ -32,16 +32,14 @@ namespace bufr
                                                const std::string& group_by_field) const
     {
         double* data_ptr = nullptr;
-        std::size_t dimRows = 0;
-        std::size_t dimCols = 0;
-        std::size_t dimZ = 0;
+        int* dims_ptr = nullptr;
+        int num_dims = 0;
         result_set__get_raw_f(class_data_ptr_,
                               field_name.c_str(),
                               group_by_field.c_str(),
                               &data_ptr,
-                              &dimRows,
-                              &dimCols,
-                              &dimZ);
+                              &dims_ptr,
+                              &num_dims);
 
         bool isString = result_set__is_string_f(class_data_ptr_, field_name.c_str());
         std::shared_ptr<ResultBase> result;
@@ -51,10 +49,10 @@ namespace bufr
             auto data = std::vector<std::string>();
 
             const char* char_ptr = (char*) data_ptr;
-            for (int row_idx = 0; row_idx < dimRows; row_idx++)
+            for (int row_idx = 0; row_idx < dims_ptr[0]; row_idx++)
             {
-                std::string str = std::string(char_ptr + row_idx * dimCols * sizeof(double),
-                                              dimCols * sizeof(double));
+                std::string str = std::string(char_ptr + row_idx * dims_ptr[1] * sizeof(double),
+                                              dims_ptr[1] * sizeof(double));
 
                 // trim trailing whitespace from str
                 str.erase(std::find_if(str.rbegin(), str.rend(),
@@ -65,32 +63,21 @@ namespace bufr
 
             auto strResult = std::make_shared<Result<std::string>>();
             strResult->data = data;
-            strResult->dims.push_back(dimRows);
+            strResult->dims.push_back(dims_ptr[0]);
             result = strResult;
         }
         else
         {
-            auto data = std::vector<float>();
-
-            data.resize(dimRows * dimCols);
-
-            // Raw fortran data arranged in column major ordering
-            // but we want row major ordering instead. So convert.
-            unsigned int pos = 0;
-            for (int rowIdx = 0; rowIdx < dimRows; rowIdx++)
+            // Compute product of dimensions
+            int tot_elements = 1;
+            for (int row = 0; row < num_dims; row++)
             {
-                for (int colIdx = 0; colIdx < dimCols; colIdx++)
-                {
-                    data[pos] = static_cast<float>(data_ptr[rowIdx + dimRows * colIdx]);
-                    pos++;
-                }
+                tot_elements *= dims_ptr[row];
             }
 
             auto floatResult = std::make_shared<Result<float>>();
-            floatResult->data = data;
-            floatResult->dims.push_back(dimRows);
-            floatResult->dims.push_back(dimCols);
-            floatResult->dims.push_back(dimZ);
+            floatResult->data = std::vector<float>(data_ptr, data_ptr + tot_elements);
+            floatResult->dims = std::vector<std::size_t>(dims_ptr, dims_ptr + num_dims);
             result = floatResult;
         }
 

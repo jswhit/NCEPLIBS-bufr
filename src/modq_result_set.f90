@@ -53,13 +53,17 @@ module modq_result_set
     integer, allocatable :: field_widths(:)
 
     contains
-      procedure :: get => result_set__get
-      procedure :: get_as_chars => result_set__get_as_chars
-      procedure :: get_raw_values => result_set__get_raw_values
-      procedure :: is_string => result_set__is_string
-      procedure :: rep_counts => result_set__rep_counts
-      procedure :: get_counts => result_set__get_counts
-      procedure :: add => result_set__add
+      private
+      procedure, public :: get_1d => result_set__get_1d
+      procedure, public :: get_2d => result_set__get_2d
+      procedure, public :: get_3d => result_set__get_3d
+      procedure, public :: get_4d => result_set__get_4d
+      procedure, public :: get_chars => result_set__get_chars   
+      procedure, public :: get_raw_values => result_set__get_raw_values
+      procedure, public :: is_string => result_set__is_string
+      procedure, public :: add => result_set__add
+      procedure :: get_rows_for_field => result_set__get_rows_for_field
+      procedure :: check_dims => result_set__check_dims
       final :: result_set__delete
   end type ResultSet
 
@@ -166,33 +170,91 @@ contains
   end function initialize__result_set
 
 
-  function result_set__get(self, field_name, group_by) result(data)
+  function result_set__get_1d(self, target_name, group_by) result(data)
     class(ResultSet), intent(in) :: self
-    character(len=*), intent(in) :: field_name
+    character(len=*), intent(in) :: target_name
+    character(len=*), intent(in), optional :: group_by
+    real(kind=8), allocatable :: data(:)
+  
+    integer :: dims(1)
+    real(kind=8), allocatable :: raw_data(:)
+    integer, allocatable :: raw_dims(:)
+  
+    call self%get_raw_values(target_name, raw_data, raw_dims, group_by)
+    call self%check_dims(raw_dims, dims)
+    dims = raw_dims
+  
+    allocate(data(dims(1)))
+    data = reshape(raw_data, dims)
+  end function
+  
+  
+  function result_set__get_2d(self, target_name, group_by) result(data)
+    class(ResultSet), intent(in) :: self
+    character(len=*), intent(in) :: target_name
+    character(len=*), intent(in), optional :: group_by
+    real(kind=8), allocatable :: data(:, :)
+  
+    integer :: dims(2)
+    real(kind=8), allocatable :: raw_data(:)
+    integer, allocatable :: raw_dims(:)
+  
+    call self%get_raw_values(target_name, raw_data, raw_dims, group_by)
+    call self%check_dims(raw_dims, dims)
+    dims = raw_dims
+  
+    allocate(data(dims(1), dims(2)))
+    data = reshape(raw_data, dims)
+  end function
+  
+  
+  function result_set__get_3d(self, target_name, group_by) result(data)
+    class(ResultSet), intent(in) :: self
+    character(len=*), intent(in) :: target_name
     character(len=*), intent(in), optional :: group_by
     real(kind=8), allocatable :: data(:, :, :)
+  
+    integer :: dims(3)
+    real(kind=8), allocatable :: raw_data(:)
+    integer, allocatable :: raw_dims(:)
+  
+    call self%get_raw_values(target_name, raw_data, raw_dims, group_by)
+    call self%check_dims(raw_dims, dims)
+    dims = raw_dims
+  
+    allocate(data(dims(1), dims(2), dims(3)))
+    data = reshape(raw_data, dims)
+  end function
+  
+  
+  function result_set__get_4d(self, target_name, group_by) result(data)
+    class(ResultSet), intent(in) :: self
+    character(len=*), intent(in) :: target_name
+    character(len=*), intent(in), optional :: group_by
+    real(kind=8), allocatable :: data(:,:,:,:)
+  
+    integer :: dims(4)
+    real(kind=8), allocatable :: raw_data(:)
+    integer, allocatable :: raw_dims(:)
+  
+    call self%get_raw_values(target_name, raw_data, raw_dims, group_by)
+    call self%check_dims(raw_dims, dims)
+    dims = raw_dims
+  
+    allocate(data(dims(1), dims(2), dims(3), dims(4)))
+    data = reshape(raw_data, dims)
+  end function
 
-    block ! Check data type of field
-      type(DataField), allocatable :: target_field
 
-      target_field = self%data_frames(1)%field_for_node_named(String(field_name))
-      if (target_field%is_string) then
-        call bort(field_name // " is a string field. Use get_as_string to get its value")
-      end if
-    end block ! Check data type of field
-
-    data = self%get_raw_values(field_name, group_by)
-  end function result_set__get
-
-
-  function result_set__get_as_chars(self, field_name, group_by) result(char_data)
+  function result_set__get_chars(self, field_name, group_by) result(char_data)
     class(ResultSet), intent(in) :: self
     character(len=*), intent(in) :: field_name
     character(len=*), intent(in), optional :: group_by
     character(:), allocatable :: char_data(:)
 
-    real(kind=8), allocatable :: dat(:, :, :)
-    integer :: data_shape(3)
+    real(kind=8), allocatable :: data(:, :)
+    integer, allocatable :: dims(:)
+    integer :: data_shape(2)
 
     block ! Check data type of field
       type(DataField), allocatable :: target_field
@@ -203,8 +265,8 @@ contains
       end if
     end block ! Check data type of field
 
-    dat = self%get_raw_values(field_name, group_by)
-    data_shape = shape(dat)
+    data = self%get_2d(field_name, group_by)
+    data_shape = shape(data)
 
     allocate(character(data_shape(2) * 8) :: char_data(data_shape(1)))
     char_data = ""
@@ -219,7 +281,7 @@ contains
         char_cursor_pos = 1
         do data_col_idx = 1, data_shape(2)
           do char_idx = 0, 7
-            data_int_rep = transfer(dat(data_row_idx, data_col_idx, 1), data_int_rep)
+            data_int_rep = transfer(data(data_row_idx, data_col_idx), data_int_rep)
             char_data(data_row_idx)(char_cursor_pos:char_cursor_pos) = &
                     transfer(ibits(data_int_rep, char_idx*8, 8), "a")
             char_cursor_pos = char_cursor_pos + 1
@@ -228,115 +290,227 @@ contains
       end do
 
     end block ! Move data into char_data
-  end function result_set__get_as_chars
+  end function result_set__get_chars
 
 
-  function result_set__get_raw_values(self, field_name, group_by) result(data)
+  subroutine result_set__get_rows_for_field(self, target_field, data_rows, dims, group_by_field)
+    class(ResultSet), intent(in) :: self
+    type(DataField), intent(in) :: target_field
+    real(kind=8), allocatable, intent(inout) :: data_rows(:, :)
+    integer, allocatable, intent(inout) :: dims(:)
+    type(DataField), intent(in), optional :: group_by_field
+
+    integer :: idx
+    integer, allocatable :: inserts(:, :)
+    integer :: max_counts
+    integer, allocatable :: idxs(:)
+    real(kind=8), allocatable :: output(:)
+
+    max_counts = 0
+    allocate(idxs(size(target_field%data)))
+    idxs = (/(idx, idx=1, size(idxs), 1)/)
+
+    block  ! compute dims
+      integer :: dim_idx
+
+      allocate(dims(size(target_field%seq_counts)))
+      do dim_idx = 1, size(dims)
+        dims(dim_idx) =  maxval(target_field%seq_counts(dim_idx)%counts)
+
+        ! Update max_counts by size of counts array
+        if (max_counts < size(target_field%seq_counts(dim_idx)%counts)) then
+          max_counts = size(target_field%seq_counts(dim_idx)%counts)
+        end if
+      end do
+    end block  ! compute dims
+
+    block ! Compute insert array
+      integer :: rep_idx
+
+      allocate(inserts(size(dims), max_counts))
+
+      do rep_idx = 1, size(target_field%seq_counts)
+        ! inserts = total elements for this dim - number accounted for by reps
+        inserts(rep_idx, :) = product(dims(rep_idx:)) - &
+                              target_field%seq_counts(rep_idx)%counts * product(dims(rep_idx+1:))
+      end do
+    end block ! Compute insert array
+
+    ! Inflate the data, compute the idxs for each data element in the result array
+    block  ! Compute data idxs
+      integer :: dim_idx, insert_idx, data_idx
+      integer :: num_inserts
+
+      do dim_idx = size(dims), 1, -1
+        do insert_idx = 1, size(inserts(dim_idx, :))
+          num_inserts = inserts(dim_idx, insert_idx)
+          if (num_inserts > 0) then
+            data_idx = product(dims(dim_idx:)) * insert_idx + product(dims(dim_idx:)) - num_inserts
+
+            where (idxs >= data_idx)
+              idxs = idxs + num_inserts
+            end where
+          end if
+        end do
+      end do
+
+    end block  ! Compute data idxs
+
+
+    ! Inflate output
+    allocate(output(product(dims)))
+    output = MissingValue
+    output(idxs) = target_field%data
+
+
+    block  ! Apply group_by and make output
+      integer :: row_idx
+      integer :: groupby_rep_idx
+      integer :: num_rows, nums_per_row
+
+      if (present(group_by_field)) then
+        groupby_rep_idx = size(group_by_field%seq_counts)
+        if (groupby_rep_idx > size(target_field%seq_counts)) then
+          num_rows = size(output)
+          deallocate(dims)
+          allocate(dims(1))
+          dims = 1
+
+          allocate(data_rows(num_rows, 1))
+          data_rows(:, 1) = output
+        else
+          num_rows = product(dims(1:groupby_rep_idx))
+          dims = dims(groupby_rep_idx:)
+          allocate(data_rows(num_rows, product(dims)))
+          data_rows(:, :) = MissingValue
+
+          nums_per_row = product(dims)
+          do row_idx = 0, (num_rows - 1)
+            data_rows(row_idx + 1, :) = output(nums_per_row * row_idx + 1 : &
+                                               nums_per_row * row_idx + nums_per_row)
+          end do
+        end if
+      else
+        allocate(data_rows(1, size(output)))
+        data_rows(1, :) = output
+      end if
+    end block  ! Apply group_by and make output
+  end subroutine
+
+
+  subroutine result_set__get_raw_values(self, field_name, data, dims, group_by)
     class(ResultSet), intent(in) :: self
     character(len=*), intent(in) :: field_name
+    real(kind=8), allocatable, intent(out) :: data(:)
+    integer, allocatable, intent(out) :: dims(:)
     character(len=*), intent(in), optional :: group_by
-    real(kind=8), allocatable :: data(:, :, :)
 
-    
     type ResultField
       real(kind=8), allocatable :: data(:, :)
+      integer, allocatable :: dims(:)
     end type ResultField
     type(ResultField), allocatable :: result_fields(:)
-    integer :: total_rows, total_cols
+    type(ResultField) :: result_field
 
+    type(DataField) :: target_field, group_by_field
+    integer :: num_rows, num_cols, total_cols, total_rows
+    integer :: frame_idx
 
-    block  ! Get Result Fields
-      integer :: frame_idx, data_idx, rep_idx, row_idx, col_idx
-      integer :: num_rows, num_cols
-      type(DataField), allocatable :: target_field, group_by_field
+    ! Find the dims based on the largest sequence counts in the fields
+    block  ! Compute dims
+      integer :: max_counts
+      integer :: cnt_idx
 
-      integer, allocatable :: rep_counts(:, :)
-
-      allocate(result_fields(self%data_frames_size))
-
-      total_rows = 0
-      total_cols = 0
       do frame_idx = 1, self%data_frames_size
         target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
+        if (present(group_by).and. group_by /= "") then
+          group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
 
-        if (target_field%missing) then
-          ! Add a missing as missing value
-          allocate(result_fields(frame_idx)%data(1, 1))
-          result_fields(frame_idx)%data = MissingValue
-          total_cols = 1
-          total_rows = total_rows + 1
-        else
-          if (present(group_by) .and. group_by /= "") then
-            group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
-            rep_counts = self%rep_counts(target_field, group_by_field)
-
-            num_rows = sum(rep_counts(2, :))
-            num_cols = maxval(rep_counts(1, :))
-            total_cols = max(num_cols, total_cols)
-
-            allocate(result_fields(frame_idx)%data(num_rows, num_cols))
-            result_fields(frame_idx)%data = MissingValue
-
-            ! If there is a single column it means the data is target field
-            ! is shallower than the group_by field. In this case we need to
-            ! copy the data for the number of group_by field repeats. The result 
-            ! is that the field_data is a single column whose length is the
-            ! sum of all the group_by field repeats.
-            if (num_cols == 1) then
-              do data_idx = 1, sum(rep_counts(2, :))
-                do rep_idx = 1, rep_counts(2, data_idx)
-                  result_fields(frame_idx)%data(sum(rep_counts(2, 1:data_idx - 1)) + rep_idx, 1) = &
-                    target_field%data(data_idx)
-                end do
-              end do
-
-            ! If there is a single row per target element it means the target 
-            ! field is deeper than the group_by field. In this case the group_by field data 
-            ! ends up being a 2d array. The number of columns is the number of 
-            ! repeats of the target field associated one of the group_by field elements.
-            ! The number of rows is consistent with the number of group_by field elements. 
-            else if (all(rep_counts(2, :) == 1)) then
-              do row_idx = 1, num_rows
-                result_fields(frame_idx)%data(row_idx, 1:rep_counts(1, row_idx)) = &
-                  target_field%data(1:rep_counts(1, row_idx))
-              end do
+          if (size(group_by_field%seq_counts) < size(target_field%seq_counts)) then
+            if (.not. allocated(dims)) then
+              allocate(dims(size(target_field%seq_counts) - size(group_by_field%seq_counts) + 1))
+              dims = 0
             end if
 
-            if (num_cols > 0) total_rows = total_rows + num_rows
-
+            do cnt_idx = size(group_by_field%seq_counts), size(target_field%seq_counts)
+              dims(cnt_idx) = max(dims(cnt_idx), maxval(target_field%seq_counts(cnt_idx)%counts))
+            end do
           else
-            allocate(result_fields(frame_idx)%data(1, size(target_field%data)))
-            result_fields(frame_idx)%data(1, 1:size(target_field%data)) = target_field%data
-            total_rows = total_rows + 1
-            if (size(target_field%data) > total_cols) total_cols = size(target_field%data)
+            if (.not. allocated(dims)) then
+              allocate(dims(1))
+              dims = 1
+              exit
+            end if
           end if
-        end if
+        else
+          if (.not. allocated(dims)) then
+            allocate(dims(size(target_field%seq_counts)))
+            dims = 0
+          end if
 
-        if (allocated(target_field)) deallocate(target_field)
-        if (allocated(group_by_field)) deallocate(group_by_field)
+          do cnt_idx = 1, size(dims)
+            dims(cnt_idx) = max(dims(cnt_idx), maxval(target_field%seq_counts(cnt_idx)%counts))
+          end do
+
+        end if
       end do
-    end block  ! Get Result Fields
+    end block  ! Compute dims
+
+    allocate(result_fields(self%data_frames_size))
+
+    total_rows = 0
+
+    do frame_idx = 1, self%data_frames_size
+      target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
+
+      if (target_field%missing) then
+        ! Add a missing as missing value
+        allocate(result_fields(frame_idx)%data(1, 1))
+        result_fields(frame_idx)%data = MissingValue
+        result_fields(frame_idx)%dims = (/1/)
+        total_cols = 1
+        total_rows = total_rows + 1
+      else
+        if (present(group_by) .and. group_by /= "") then
+          group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
+
+          call self%get_rows_for_field(target_field, & 
+                                        result_fields(frame_idx)%data, &
+                                        result_fields(frame_idx)%dims, &
+                                        group_by_field)
+        else
+          call self%get_rows_for_field(target_field, &
+                                        result_fields(frame_idx)%data, &
+                                        result_fields(frame_idx)%dims)
+        end if
+      end if
+
+      total_rows = total_rows + result_fields(frame_idx)%dims(1)
+    end do
 
     block  ! Make Output Data
       integer :: data_row_idx
-      integer :: field_idx
+      integer :: field_idx, row_idx
       integer :: data_shape(2)
 
-      allocate(data(total_rows, total_cols, 1))
+      allocate(data(total_rows*product(dims)))
       data = MissingValue
 
-      data_row_idx = 1
+      data_row_idx = 0
       do field_idx = 1, size(result_fields)
-        data_shape = shape(result_fields(field_idx)%data)
-        data(data_row_idx:data_row_idx + data_shape(1) - 1, 1:data_shape(2), 1) = &
-          result_fields(field_idx)%data
-        data_row_idx = data_row_idx + data_shape(1)
+        do row_idx = 1, result_fields(field_idx)%dims(1)
+          data(data_row_idx*product(dims) + 1:data_row_idx*product(dims) + product(dims)) = &
+            result_fields(field_idx)%data(row_idx, :)
+          data_row_idx = data_row_idx + 1
+        end do
       end do
 
+      dims(1) = total_rows
+
     end block  ! Make Output Data
-  end function result_set__get_raw_values
-  
-  
+  end subroutine
+
+
   ! Check if the field is a string
   function result_set__is_string(self, field_name) result(is_string)
     class(ResultSet), intent(in) :: self
@@ -349,152 +523,6 @@ contains
     target_field = self%data_frames(1)%field_for_node_named(String(field_name))
     is_string = target_field%is_string
   end function result_set__is_string
-
-
-  ! @brief Compute the total number of elements that exist in the target field for a group_by field.
-  !        Example 1:
-  !          Lets say we have a field with the following sequence counts:
-  !            root:                   1
-  !            seq_1 (group_by field): 3
-  !            seq_2:                  1, 2, 1
-  !            seq_3 (target field):   2, 2, 1, 2
-  !
-  !          In this case the target field is deeper than the group_by field. So we want to group 
-  !          the target field by the group_by field that the target corresponds to. The total number
-  !          of target values is 7 (sum of target field counts), while there are 3 group_by field 
-  !          values. The sequence count table indicates that for the first group_by field value 
-  !          there are 2 target field values (1 -> 3 -> 1 -> 2). The second group_by field value 
-  !          corresponds the next 3 target field values (1 -> 3 -> 2 -> (2, 1)). The third group_by 
-  !          field value corresponds to the last 2 target field value, and so on (1 -> 3 -> 1 -> 2).
-  !
-  !          Writing the result in table form we can represent the result as follows:
-  !
-  !                                 Target Counts | Group_by Counts
-  !                                 ---------------------------
-  !                                             2 | 1
-  !                                             3 | 1
-  !                                             2 | 1
-  !            
-  !        Example 2:
-  !          Lets say we have a field with the following sequence counts:
-  !            root:                   1
-  !            seq_1 (target field):   3
-  !            seq_2:                  1, 2, 1
-  !            seq_3 (group_by field): 2, 2, 1, 2
-  !          
-  !          In this case the target field is shallower than the group_by field. Basically what this
-  !          means is that each field in the target field will be repeated by the number of times
-  !          indicated by the group_by field. So in the example above there are a total number of 3
-  !          target field values (sum of target_field counts). The number of counts in the group_by 
-  !          field corresponding to the first target value is 2, corresponding to the first group_by
-  !          field count. The number of counts of the second target value is 2, corresponding to the
-  !          second group_by field count, and so on.
-  !
-  !          Writing the result in table form we can represent the result as follows:
-  !
-  !                                 Target Counts | Group_by Counts
-  !                                 ---------------------------
-  !                                             1 | 2
-  !                                             1 | 3
-  !                                             1 | 2
-  !
-  ! @param[in] self - class(ResultSet) : the class instance.
-  ! @param[in] target_field - type(DataField) : the target
-  ! @param[in] group_by_field - type(DataField) : the group_by field
-  ! @return counts - integer(2, :) : The relative counts between the target and group_by fields (see 
-  !                                  brief).
-  !
-  function result_set__rep_counts(self, target_field, group_by_field) result(counts)
-    class(ResultSet), intent(in) :: self
-    type(DataField), intent(in) :: target_field
-    type(DataField), intent(in) :: group_by_field
-
-    integer, allocatable :: counts(:, :)
-    integer :: seq_idx, rep_idx
-    integer :: target_count
-    integer :: count
-
-    do seq_idx = 1, min(size(target_field%seq_path), size(group_by_field%seq_path))
-      if (target_field%seq_path(seq_idx) /= group_by_field%seq_path(seq_idx)) then
-        call bort("The target field " // target_field%name%chars() // " and the group_by field " &
-                  // group_by_field%name%chars() // " don't occur along the same path.")
-      end if
-    end do
-
-    ! The target is deeper than the group_by field
-    if (size(target_field%seq_path) > size(group_by_field%seq_path)) then
-      target_count =  sum(group_by_field%seq_counts(size(group_by_field%seq_counts))%counts)
-      allocate(counts(2, target_count))
-
-      do rep_idx = 1, target_count
-        count = self%get_counts(target_field, &
-                                size(group_by_field%seq_counts) + 1, &
-                                1, &
-                                rep_idx - 1)
-
-        counts(1, rep_idx) = count
-        counts(2, rep_idx) = 1
-      end do
-
-    ! The target is at the same level as the group_by field
-    else if (size(target_field%seq_path) == size(group_by_field%seq_path)) then
-      target_count =  sum(target_field%seq_counts(size(target_field%seq_counts))%counts)
-      allocate(counts(2, target_count))
-
-      counts = 1
-
-    ! The target is shallower than the group_by field
-    else
-      target_count =  sum(target_field%seq_counts(size(target_field%seq_counts))%counts)
-      allocate(counts(2, target_count))
-
-      do rep_idx = 1, target_count
-        count = self%get_counts(group_by_field, &
-                                size(target_field%seq_counts) + 1, &
-                                1, &
-                                rep_idx - 1)
-
-        counts(1, rep_idx) = 1
-        counts(2, rep_idx) = count
-      end do
-    end if
-  end function result_set__rep_counts
-
-
-  ! @brief Recursively count the number of elements associated with a field coming from a specific
-  !        sequence instance.
-  !
-  ! @param[in] self - class(ResultSet) : the class instance.
-  ! @param[in] field - type(DataField) : the field whose reps we want to count to.
-  ! @param[in] seq_idx - integer : the index of the sequence we are counting from.
-  ! @param[in] last_count - integer : the count from the previous sequence.
-  ! param[in] offset - integer : the offset inside the current sequence count list.
-  ! @return count - integer : the number of reps
-  !
-  recursive function result_set__get_counts(self, field, seq_idx, last_count, offset) result(count)
-    class(ResultSet), intent(in) :: self
-    type(DataField), target, intent(in) :: field
-    integer, intent(in) :: seq_idx
-    integer, intent(in) :: last_count
-    integer, intent(in) :: offset
-    integer :: count
-
-    integer, pointer :: seq_counts(:)
-    integer :: cnt_idx
-
-    count = 0
-    if (seq_idx == size(field%seq_path)) then
-      count = sum(field%seq_counts(seq_idx)%counts(offset + 1:offset + last_count))
-    else
-      seq_counts => field%seq_counts(seq_idx)%counts
-      do cnt_idx = offset + 1, offset + last_count
-        count = count + self%get_counts(field, &
-                                        seq_idx + 1, &
-                                        seq_counts(cnt_idx), &
-                                        sum(seq_counts(1:cnt_idx - 1)))
-      end do
-    end if
-  end function result_set__get_counts
 
 
   subroutine result_set__add(self, data_frame)
@@ -544,6 +572,18 @@ contains
 
   end subroutine result_set__add
 
+
+  subroutine result_set__check_dims(self, raw_dims, dims)
+    class(ResultSet), intent(in) :: self
+    integer, intent(in) :: raw_dims(:)
+    integer, intent(in) :: dims(:)
+
+    if (size(raw_dims) /= size(dims)) then
+      ! call bort("Error: data has the wrong number of dims. Try get_" // size(raw_dims) // "d instead.")
+    end if
+  end subroutine result_set__check_dims
+
+
   subroutine result_set__delete(self)
     type(ResultSet), intent(inout) :: self
 
@@ -557,3 +597,4 @@ contains
   end subroutine result_set__delete
 
 end module modq_result_set
+

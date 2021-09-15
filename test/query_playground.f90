@@ -137,8 +137,14 @@ subroutine test__query_radiance
   type(QuerySet) :: query_set
   type(ResultSet) :: result_set
   real(kind=8), allocatable :: dat(:,:,:)
+  real(kind=8), allocatable :: data(:,:)
+  integer, allocatable :: dims(:)
 
-  
+  real(kind=8), allocatable :: dat_out(:,:)
+  integer :: idx
+  integer :: t_dims(2)
+
+
 !  open(lunit,
 !  file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gnssro_kompsat5_20180415_00Z.bufr")
   open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gdas.t18z.1bmhs.tm00.bufr_d")
@@ -153,7 +159,30 @@ subroutine test__query_radiance
   result_set = execute(lunit, query_set, next=1)
 
   ! print *, "Longitude", result_set%get("longitude", group_by="radiance")
-  print *, "Radiance", result_set%get("radiance", group_by="longitude")
+  ! print *, "Radiance", result_set%get("radiance", group_by="longitude")
+
+  ! call result_set%get_raw_values("radiance", data, dims)
+  data = result_set%get_2d("radiance", group_by="longitude")
+
+  t_dims = shape(data)
+  
+  print *, "Dims", t_dims
+  do idx = 1, t_dims(1)
+    print *, data(idx, :)
+  end do
+
+  ! print *, "Radiance", data
+  ! print *, "Dims", dims
+
+  ! allocate(dat_out(dims(1), dims(2)))
+  ! t_dims = dims
+  ! dat_out = reshape(data, t_dims)
+
+  ! do idx = 1, dims(1)
+  !   print *, dat_out(idx, :)
+  ! end do
+
+  ! print *, reshape(data, ((/464, 5/)))
 
   call closbf(lunit)
   close(lunit)
@@ -181,7 +210,7 @@ subroutine test__query_ia5
 !  print *, "Num Messages", count_msgs(lunit)
   result_set = execute(lunit, query_set, next=5)
 
-  data = result_set%get_as_chars("resistance_is_futile")
+  data = result_set%get_chars("resistance_is_futile")
 
   print *, "Type: "
   block  ! print data
@@ -298,7 +327,7 @@ subroutine test_adpsfc
 
   type(QuerySet) :: query_set
   type(ResultSet) :: result_set
-  real(kind=8), allocatable :: dat(:,:,:)
+  real(kind=8), allocatable :: dat(:,:)
   real(kind=8), allocatable :: old_interface_data(:)
 
   open(lunit, file="/home/rmclaren/Data/ADPSFC_split.prepbufr")
@@ -343,8 +372,8 @@ subroutine test_adpsfc
 !  print *, "", shape(result_set%get("temperature", group_by="latitude"))
 !  print *, "Longitude: ", shape(result_set%get("longitude"))
 
-  print *, result_set%get("latitude")
-  dat = result_set%get("temperature") + 273.15
+  print *, result_set%get_1d("latitude")
+  dat = result_set%get_2d("temperature") + 273.15
 !  print *, dat(2,:,1)
   print *, shape(dat)
 
@@ -366,7 +395,7 @@ program test_query
 !  call test_query_parser
  call test__query_radiance
 !  call test__query_gnssro
- call test_adpsfc
+!  call test_adpsfc
   ! call test_table
 end program test_query
 
