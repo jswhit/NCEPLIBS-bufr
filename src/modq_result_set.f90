@@ -297,7 +297,7 @@ contains
     class(ResultSet), intent(in) :: self
     type(DataField), intent(in) :: target_field
     real(kind=8), allocatable, intent(inout) :: data_rows(:, :)
-    integer, allocatable, intent(inout) :: dims(:)
+    integer, allocatable, intent(in) :: dims(:)
     type(DataField), intent(in), optional :: group_by_field
 
     integer :: idx
@@ -310,19 +310,16 @@ contains
     allocate(idxs(size(target_field%data)))
     idxs = (/(idx, idx=1, size(idxs), 1)/)
 
-    block  ! compute dims
+    block  ! compute max counts
       integer :: dim_idx
 
-      allocate(dims(size(target_field%seq_counts)))
       do dim_idx = 1, size(dims)
-        dims(dim_idx) =  maxval(target_field%seq_counts(dim_idx)%counts)
-
         ! Update max_counts by size of counts array
         if (max_counts < size(target_field%seq_counts(dim_idx)%counts)) then
           max_counts = size(target_field%seq_counts(dim_idx)%counts)
         end if
       end do
-    end block  ! compute dims
+    end block  ! compute max counts
 
     block ! Compute insert array
       integer :: rep_idx
@@ -372,15 +369,11 @@ contains
         groupby_rep_idx = size(group_by_field%seq_counts)
         if (groupby_rep_idx > size(target_field%seq_counts)) then
           num_rows = size(output)
-          deallocate(dims)
-          allocate(dims(1))
-          dims = 1
 
           allocate(data_rows(num_rows, 1))
           data_rows(:, 1) = output
         else
           num_rows = product(dims(1:groupby_rep_idx))
-          dims = dims(groupby_rep_idx:)
           allocate(data_rows(num_rows, product(dims)))
           data_rows(:, :) = MissingValue
 
@@ -474,11 +467,13 @@ contains
         if (present(group_by) .and. group_by /= "") then
           group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
 
+          result_fields(frame_idx)%dims = dims
           call self%get_rows_for_field(target_field, & 
                                         result_fields(frame_idx)%data, &
                                         result_fields(frame_idx)%dims, &
                                         group_by_field)
         else
+          result_fields(frame_idx)%dims = dims
           call self%get_rows_for_field(target_field, &
                                         result_fields(frame_idx)%data, &
                                         result_fields(frame_idx)%dims)
