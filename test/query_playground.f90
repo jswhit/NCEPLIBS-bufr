@@ -390,10 +390,10 @@ program test_query
 !  call test__query_set
 !  call test__result_set
 !  call test__query_gnssro
-!  call test__query_ia5
+ call test__query_ia5
 !  call test_int_list
 !  call test_query_parser
- call test__query_radiance
+!  call test__query_radiance
 !  call test__query_gnssro
 !  call test_adpsfc
   ! call test_table

@@ -252,8 +252,8 @@ contains
     character(len=*), intent(in), optional :: group_by
     character(:), allocatable :: char_data(:)
 
-    real(kind=8), allocatable :: data(:, :)
-    integer :: data_shape(2)
+    real(kind=8), allocatable :: data(:)
+    integer :: data_shape(1)
 
     block ! Check data type of field
       type(DataField), allocatable :: target_field
@@ -264,10 +264,10 @@ contains
       end if
     end block ! Check data type of field
 
-    data = self%get_2d(field_name, group_by)
+    data = self%get_1d(field_name, group_by)
     data_shape = shape(data)
 
-    allocate(character(data_shape(2) * 8) :: char_data(data_shape(1)))
+    allocate(character(8) :: char_data(data_shape(1)))
     char_data = ""
 
     ! Manually copy each element in the data array
@@ -278,13 +278,11 @@ contains
 
       do data_row_idx = 1, data_shape(1)
         char_cursor_pos = 1
-        do data_col_idx = 1, data_shape(2)
-          do char_idx = 0, 7
-            data_int_rep = transfer(data(data_row_idx, data_col_idx), data_int_rep)
-            char_data(data_row_idx)(char_cursor_pos:char_cursor_pos) = &
-                    transfer(ibits(data_int_rep, char_idx*8, 8), "a")
-            char_cursor_pos = char_cursor_pos + 1
-          end do
+        do char_idx = 0, 7
+          data_int_rep = transfer(data(data_row_idx), data_int_rep)
+          char_data(data_row_idx)(char_cursor_pos:char_cursor_pos) = &
+                  transfer(ibits(data_int_rep, char_idx*8, 8), "a")
+          char_cursor_pos = char_cursor_pos + 1
         end do
       end do
 
@@ -555,8 +553,13 @@ contains
     integer, intent(in) :: raw_dims(:)
     integer, intent(in) :: dims(:)
 
+    character(len=20) :: size_dims_str
+
+    write (size_dims_str, *) size(raw_dims)
+
     if (size(raw_dims) /= size(dims)) then
-      ! call bort("Error: data has the wrong number of dims. Try get_" // size(raw_dims) // "d instead.")
+      call bort("Error: data has the wrong number of dims. Try get_" // &
+                trim(adjustl(size_dims_str)) // "d instead.")
     end if
   end subroutine result_set__check_dims
 
