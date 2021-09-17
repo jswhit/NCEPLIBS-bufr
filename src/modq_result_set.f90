@@ -253,7 +253,6 @@ contains
     character(:), allocatable :: char_data(:)
 
     real(kind=8), allocatable :: data(:, :)
-    integer, allocatable :: dims(:)
     integer :: data_shape(2)
 
     block ! Check data type of field
@@ -304,7 +303,7 @@ contains
     integer, allocatable :: inserts(:, :)
     integer :: max_counts
     integer, allocatable :: idxs(:)
-    real(kind=8), allocatable :: output(:)
+    real(kind=8) :: output(product(dims))
 
     max_counts = 0
     allocate(idxs(size(target_field%data)))
@@ -355,7 +354,6 @@ contains
 
 
     ! Inflate output
-    allocate(output(product(dims)))
     output = MissingValue
     output(idxs) = target_field%data
 
@@ -370,11 +368,11 @@ contains
         if (groupby_rep_idx > size(target_field%seq_counts)) then
           num_rows = size(output)
 
-          allocate(data_rows(num_rows, 1))
+          if (.not. allocated(data_rows)) allocate(data_rows(num_rows, 1))
           data_rows(:, 1) = output
         else
           num_rows = product(dims(1:groupby_rep_idx))
-          allocate(data_rows(num_rows, product(dims)))
+          if (.not. allocated(data_rows)) allocate(data_rows(num_rows, product(dims)))
           data_rows(:, :) = MissingValue
 
           nums_per_row = product(dims)
@@ -384,7 +382,7 @@ contains
           end do
         end if
       else
-        allocate(data_rows(1, size(output)))
+        if (.not. allocated(data_rows)) allocate(data_rows(1, size(output)))
         data_rows(1, :) = output
       end if
     end block  ! Apply group_by and make output
@@ -398,20 +396,14 @@ contains
     integer, allocatable, intent(out) :: dims(:)
     character(len=*), intent(in), optional :: group_by
 
-    type ResultField
-      real(kind=8), allocatable :: data(:, :)
-      integer, allocatable :: dims(:)
-    end type ResultField
-    type(ResultField), allocatable :: result_fields(:)
-    type(ResultField) :: result_field
-
     type(DataField) :: target_field, group_by_field
-    integer :: num_rows, num_cols, total_cols, total_rows
-    integer :: frame_idx
+    integer :: total_rows
+
+    total_rows = 0
 
     ! Find the dims based on the largest sequence counts in the fields
     block  ! Compute dims
-      integer :: max_counts
+      integer :: frame_idx
       integer :: cnt_idx
 
       do frame_idx = 1, self%data_frames_size
@@ -444,65 +436,55 @@ contains
           do cnt_idx = 1, size(dims)
             dims(cnt_idx) = max(dims(cnt_idx), maxval(target_field%seq_counts(cnt_idx)%counts))
           end do
-
         end if
+
+        total_rows = total_rows + dims(1)
       end do
     end block  ! Compute dims
 
-    allocate(result_fields(self%data_frames_size))
-
-    total_rows = 0
-
-    do frame_idx = 1, self%data_frames_size
-      target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
-
-      if (target_field%missing) then
-        ! Add a missing as missing value
-        allocate(result_fields(frame_idx)%data(1, 1))
-        result_fields(frame_idx)%data = MissingValue
-        result_fields(frame_idx)%dims = (/1/)
-        total_cols = 1
-        total_rows = total_rows + 1
-      else
-        if (present(group_by) .and. group_by /= "") then
-          group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
-
-          result_fields(frame_idx)%dims = dims
-          call self%get_rows_for_field(target_field, & 
-                                        result_fields(frame_idx)%data, &
-                                        result_fields(frame_idx)%dims, &
-                                        group_by_field)
-        else
-          result_fields(frame_idx)%dims = dims
-          call self%get_rows_for_field(target_field, &
-                                        result_fields(frame_idx)%data, &
-                                        result_fields(frame_idx)%dims)
-        end if
-      end if
-
-      total_rows = total_rows + result_fields(frame_idx)%dims(1)
-    end do
-
-    block  ! Make Output Data
+    block  ! Make data set
+      real(kind=8), allocatable :: frame_data(:,:)
+      integer :: frame_idx
       integer :: data_row_idx
-      integer :: field_idx, row_idx
-      integer :: data_shape(2)
+      integer :: row_idx
 
       allocate(data(total_rows*product(dims)))
       data = MissingValue
 
-      data_row_idx = 0
-      do field_idx = 1, size(result_fields)
-        do row_idx = 1, result_fields(field_idx)%dims(1)
+      do frame_idx = 1, self%data_frames_size
+        target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
+
+        if (target_field%missing) then
+          ! Add a missing as missing value
+          data_row_idx = dims(1) * (frame_idx - 1)
+          data(data_row_idx*product(dims) + 1:data_row_idx*product(dims) + product(dims)) &
+            = MissingValue
+        else
+          if (present(group_by) .and. group_by /= "") then
+            group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
+
+            call self%get_rows_for_field(target_field, & 
+                                          frame_data, &
+                                          dims, &
+                                          group_by_field)
+          else
+            call self%get_rows_for_field(target_field, &
+                                          frame_data, &
+                                          dims)
+          end if
+        end if
+
+        data_row_idx = dims(1) * (frame_idx - 1)
+        do row_idx = 1, dims(1)
           data(data_row_idx*product(dims) + 1:data_row_idx*product(dims) + product(dims)) = &
-            result_fields(field_idx)%data(row_idx, :)
+            frame_data(row_idx, :)
           data_row_idx = data_row_idx + 1
         end do
       end do
 
       dims(1) = total_rows
+    end block  ! Make data set
 
-    end block  ! Make Output Data
   end subroutine
 
 
