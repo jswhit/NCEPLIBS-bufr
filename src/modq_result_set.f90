@@ -1,5 +1,6 @@
 module modq_result_set
   use modq_string
+  use modq_list
   implicit none
 
   private
@@ -134,13 +135,16 @@ contains
 
     integer :: field_idx
     logical :: field_found
-    type(DataField), allocatable :: field
+    type(DataField) :: field
+
+    integer :: cnt = 0
 
     field_found = .false.
     do field_idx = 1, size(self%data_fields)
       if (self%data_fields(field_idx)%name == name) then
-        field = self%data_fields(field_idx)
         field_found = .true.
+        field = self%data_fields(field_idx)
+        cnt = cnt + 1
         exit
       end if
     end do
@@ -256,7 +260,7 @@ contains
     integer :: data_shape(1)
 
     block ! Check data type of field
-      type(DataField), allocatable :: target_field
+      type(DataField) :: target_field
 
       target_field = self%data_frames(1)%field_for_node_named(String(field_name))
       if (.not. target_field%is_string) then
@@ -322,6 +326,7 @@ contains
       integer :: rep_idx
 
       allocate(inserts(size(dims), max_counts))
+      inserts = 0
 
       do rep_idx = 1, size(target_field%seq_counts)
         ! inserts = total elements for this dim - number accounted for by reps
@@ -403,6 +408,13 @@ contains
     block  ! Compute dims
       integer :: frame_idx
       integer :: cnt_idx
+      integer :: groupby_idx
+      integer :: dims_len
+      type(IntList) :: dims_list
+      integer, pointer :: dims_array(:)
+
+      dims_list = IntList()
+      groupby_idx = 1
 
       do frame_idx = 1, self%data_frames_size
         target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
@@ -410,35 +422,53 @@ contains
           group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
 
           if (size(group_by_field%seq_counts) < size(target_field%seq_counts)) then
-            if (.not. allocated(dims)) then
-              allocate(dims(size(target_field%seq_counts) - size(group_by_field%seq_counts) + 1))
-              dims = 0
-            end if
+            groupby_idx = max(groupby_idx, size(group_by_field%seq_counts))
 
-            do cnt_idx = size(group_by_field%seq_counts), size(target_field%seq_counts)
-              dims(cnt_idx) = max(dims(cnt_idx), maxval(target_field%seq_counts(cnt_idx)%counts))
+            dims_len = size(target_field%seq_counts)
+            if (dims_list%length() < dims_len) then
+              call dims_list%resize(dims_len)
+            end if
+  
+            do cnt_idx = 1, dims_len
+              dims_list%at(cnt_idx) = max(dims_list%at(cnt_idx), &
+                                          maxval(target_field%seq_counts(cnt_idx)%counts))
             end do
           else
-            if (.not. allocated(dims)) then
-              allocate(dims(1))
-              dims = 1
-              exit
-            end if
+            call dims_list%push(1)
+            exit
           end if
         else
-          if (.not. allocated(dims)) then
-            allocate(dims(size(target_field%seq_counts)))
-            dims = 0
+          dims_len = size(target_field%seq_counts)
+          if (dims_list%length() < dims_len) then
+            call dims_list%resize(dims_len)
           end if
 
-          do cnt_idx = 1, size(dims)
-            dims(cnt_idx) = max(dims(cnt_idx), maxval(target_field%seq_counts(cnt_idx)%counts))
+          do cnt_idx = 1, dims_len
+            dims_list%at(cnt_idx) = max(dims_list%at(cnt_idx), &
+                                        maxval(target_field%seq_counts(cnt_idx)%counts))
           end do
         end if
 
-        total_rows = total_rows + dims(1)
+        total_rows = total_rows + dims_list%at(1)
       end do
+
+      if (present(group_by)) then
+        if (group_by /= "") then
+          dims_len = dims_list%length() - groupby_idx
+        else
+          dims_len = dims_list%length()
+        end if
+      else
+        dims_len = dims_list%length()
+      end if
+
+      allocate(dims(dims_len))
+
+      dims_array => dims_list%array()
+      dims(1) = product(dims_array(1:groupby_idx))
+      if (dims_len > 1) dims(2:dims_len) = dims_array(groupby_idx+1:)
     end block  ! Compute dims
+    
 
     block  ! Make data set
       real(kind=8), allocatable :: frame_data(:,:)
@@ -470,14 +500,14 @@ contains
                                           frame_data, &
                                           dims)
           end if
-        end if
 
-        data_row_idx = dims(1) * (frame_idx - 1)
-        do row_idx = 1, dims(1)
-          data(data_row_idx*product(dims) + 1:data_row_idx*product(dims) + product(dims)) = &
-            frame_data(row_idx, :)
-          data_row_idx = data_row_idx + 1
-        end do
+          data_row_idx = dims(1) * (frame_idx - 1)
+          do row_idx = 1, dims(1)
+            data(data_row_idx*product(dims) + 1:data_row_idx*product(dims) + product(dims)) = &
+              frame_data(row_idx, :)
+            data_row_idx = data_row_idx + 1
+          end do
+        end if
       end do
 
       dims(1) = total_rows
@@ -491,7 +521,7 @@ contains
     class(ResultSet), intent(in) :: self
     character(len=*), intent(in) :: field_name
 
-    type(DataField), allocatable :: target_field
+    type(DataField) :: target_field
     logical :: is_string
     is_string = .false.
       

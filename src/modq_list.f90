@@ -58,7 +58,7 @@ module modq_list
           self%resize_idx = self%resize_idx + 1
         end if
 
-        call self%resize(ResizeSizes(self%resize_idx) + size(self%values))
+        call self%resize(ResizeSizes(self%resize_idx) + size(self%values), alloc_only=.true.)
       end if
 
       self%values(self%size + 1) = value
@@ -88,7 +88,7 @@ module modq_list
       integer, intent(in) :: idx
       integer, pointer :: val
 
-      if (sizeof(self%values) < idx) then
+      if (self%size < idx) then
         call bort("IntList: Index out of range.")
       end if
 
@@ -109,9 +109,11 @@ module modq_list
     end function int_list__length
 
 
-    subroutine int_list__resize(self, new_size)
+    subroutine int_list__resize(self, new_size, alloc_only)
       class(IntList), intent(inout) :: self
       integer, intent(in) :: new_size
+      logical, intent(in), optional :: alloc_only
+
       integer, pointer :: tmp(:)
 
       if (new_size < self%size) then
@@ -119,6 +121,7 @@ module modq_list
       end if
 
       allocate(tmp(new_size))
+      tmp = 0
 
       if(associated(self%values)) then
         tmp(1:self%size) = self%values(1:self%size)
@@ -127,6 +130,12 @@ module modq_list
       end if
 
       self%values => tmp
+
+      if (present(alloc_only)) then
+        if (.not. alloc_only) self%size = new_size
+      else
+        self%size = new_size
+      end if
     end subroutine
 
     subroutine int_list__delete(self)
