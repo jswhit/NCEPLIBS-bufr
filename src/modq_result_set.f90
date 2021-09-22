@@ -294,12 +294,12 @@ contains
   end function result_set__get_chars
 
 
-  subroutine result_set__get_rows_for_field(self, target_field, data_rows, dims, group_by_field)
+  subroutine result_set__get_rows_for_field(self, target_field, data_rows, dims, groupby_idx)
     class(ResultSet), intent(in) :: self
     type(DataField), intent(in) :: target_field
     real(kind=8), allocatable, intent(inout) :: data_rows(:, :)
     integer, allocatable, intent(in) :: dims(:)
-    type(DataField), intent(in), optional :: group_by_field
+    integer, intent(in), optional :: groupby_idx
 
     integer :: idx
     integer, allocatable :: inserts(:, :)
@@ -363,22 +363,23 @@ contains
 
     block  ! Apply group_by and make output
       integer :: row_idx
-      integer :: groupby_rep_idx
-      integer :: num_rows, nums_per_row
+      integer :: num_rows
+      integer, allocatable :: row_dims(:)
+      integer :: nums_per_row
 
-      if (present(group_by_field)) then
-        groupby_rep_idx = size(group_by_field%seq_counts)
-        if (groupby_rep_idx > size(target_field%seq_counts)) then
+      if (present(groupby_idx)) then
+        if (groupby_idx > size(target_field%seq_counts)) then
           num_rows = size(output)
 
           if (.not. allocated(data_rows)) allocate(data_rows(num_rows, 1))
           data_rows(:, 1) = output
         else
-          num_rows = product(dims(1:groupby_rep_idx))
-          if (.not. allocated(data_rows)) allocate(data_rows(num_rows, product(dims)))
+          num_rows = product(dims(1:groupby_idx))
+          row_dims = dims(groupby_idx + 1 : size(dims))
+          if (.not. allocated(data_rows)) allocate(data_rows(num_rows, product(row_dims)))
           data_rows(:, :) = MissingValue
 
-          nums_per_row = product(dims)
+          nums_per_row = product(row_dims)
           do row_idx = 0, (num_rows - 1)
             data_rows(row_idx + 1, :) = output(nums_per_row * row_idx + 1 : &
                                                nums_per_row * row_idx + nums_per_row)
@@ -401,6 +402,8 @@ contains
 
     type(DataField) :: target_field, group_by_field
     integer :: total_rows
+    integer :: groupby_idx
+    integer, allocatable :: all_dims(:)
 
     total_rows = 0
 
@@ -408,65 +411,52 @@ contains
     block  ! Compute dims
       integer :: frame_idx
       integer :: cnt_idx
-      integer :: groupby_idx
       integer :: dims_len
       type(IntList) :: dims_list
-      integer, pointer :: dims_array(:)
 
       dims_list = IntList()
       groupby_idx = 1
 
+      !  Go through the all the frames and find the max of all dimensions and the repetition index of the
+      !  groupby field.
       do frame_idx = 1, self%data_frames_size
         target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
+
+        dims_len = size(target_field%seq_counts)
+        if (dims_list%length() < dims_len) then
+          call dims_list%resize(dims_len)
+        end if
+
+        do cnt_idx = 1, dims_len
+          dims_list%at(cnt_idx) = max(dims_list%at(cnt_idx), &
+                                      maxval(target_field%seq_counts(cnt_idx)%counts))
+        end do
+
         if (present(group_by).and. group_by /= "") then
           group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
-
-          if (size(group_by_field%seq_counts) < size(target_field%seq_counts)) then
-            groupby_idx = max(groupby_idx, size(group_by_field%seq_counts))
-
-            dims_len = size(target_field%seq_counts)
-            if (dims_list%length() < dims_len) then
-              call dims_list%resize(dims_len)
-            end if
-  
-            do cnt_idx = 1, dims_len
-              dims_list%at(cnt_idx) = max(dims_list%at(cnt_idx), &
-                                          maxval(target_field%seq_counts(cnt_idx)%counts))
-            end do
-          else
-            call dims_list%push(1)
-            exit
-          end if
-        else
-          dims_len = size(target_field%seq_counts)
-          if (dims_list%length() < dims_len) then
-            call dims_list%resize(dims_len)
-          end if
-
-          do cnt_idx = 1, dims_len
-            dims_list%at(cnt_idx) = max(dims_list%at(cnt_idx), &
-                                        maxval(target_field%seq_counts(cnt_idx)%counts))
-          end do
+          groupby_idx = max(groupby_idx, size(group_by_field%seq_counts))
         end if
-
-        total_rows = total_rows + dims_list%at(1)
       end do
 
-      if (present(group_by)) then
-        if (group_by /= "") then
-          dims_len = dims_list%length() - groupby_idx
+      all_dims = dims_list%array()
+      if (present(group_by) .and. group_by /= "") then
+        ! The groupby field occurs at the same or greater repetition level as the target field.
+        if (groupby_idx >= dims_list%length()) then
+          allocate(dims(1))
+          dims(1) = product(all_dims)
+
+        ! The groupby field occurs at a lower repetition level than the target field.
         else
-          dims_len = dims_list%length()
+          allocate(dims(dims_list%length() - groupby_idx + 1))
+          dims(1) = product(all_dims(1:groupby_idx))
+          dims(2:size(dims)) = all_dims(groupby_idx+1:size(all_dims))
         end if
+      ! There is no groupby field. So use all the dimensions.
       else
-        dims_len = dims_list%length()
+        allocate(dims, source=all_dims)
       end if
 
-      allocate(dims(dims_len))
-
-      dims_array => dims_list%array()
-      dims(1) = product(dims_array(1:groupby_idx))
-      if (dims_len > 1) dims(2:dims_len) = dims_array(groupby_idx+1:)
+      total_rows = dims(1) * self%data_frames_size
     end block  ! Compute dims
     
 
@@ -475,44 +465,42 @@ contains
       integer :: frame_idx
       integer :: data_row_idx
       integer :: row_idx
+      integer :: row_length
 
-      allocate(data(total_rows*product(dims)))
+      row_length = product(dims(2:size(dims)))
+
+      allocate(data(total_rows*row_length))
       data = MissingValue
 
       do frame_idx = 1, self%data_frames_size
         target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
 
-        if (target_field%missing) then
-          ! Add a missing as missing value
-          data_row_idx = dims(1) * (frame_idx - 1)
-          data(data_row_idx*product(dims) + 1:data_row_idx*product(dims) + product(dims)) &
-            = MissingValue
-        else
+        if (.not. target_field%missing) then
           if (present(group_by) .and. group_by /= "") then
-            group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
 
             call self%get_rows_for_field(target_field, & 
                                           frame_data, &
-                                          dims, &
-                                          group_by_field)
+                                          all_dims, &
+                                          groupby_idx)
           else
             call self%get_rows_for_field(target_field, &
                                           frame_data, &
-                                          dims)
+                                          all_dims)
           end if
 
           data_row_idx = dims(1) * (frame_idx - 1)
+
           do row_idx = 1, dims(1)
-            data(data_row_idx*product(dims) + 1:data_row_idx*product(dims) + product(dims)) = &
+            data(data_row_idx*row_length + 1:data_row_idx*row_length + row_length) = &
               frame_data(row_idx, :)
             data_row_idx = data_row_idx + 1
           end do
         end if
       end do
 
+      ! Convert dims per data frame to dims for all the collected data.
       dims(1) = total_rows
     end block  ! Make data set
-
   end subroutine
 
 
