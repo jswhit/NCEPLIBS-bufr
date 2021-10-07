@@ -96,6 +96,7 @@ module query_interface
     integer, allocatable :: dims_f(:)
     real(kind=8), pointer :: data_f_ptr(:)
     integer(kind=c_int), pointer :: dims_ptr(:)
+    integer(kind=c_int), allocatable :: dims_c(:)
 
     type(ResultSet), pointer :: result_set_fptr
     call c_f_pointer(cls, result_set_fptr)
@@ -105,11 +106,13 @@ module query_interface
 
     call result_set_fptr%get_raw_values(f_field, data_f, dims_f, f_group_by_field)
 
-    num_dims = size(dims_f)
+    num_dims = size(dims_f, kind=c_int)
+    allocate(dims_c(size(dims_f)))
+    dims_c(1:size(dims_c)) = transfer(dims_f(1:size(dims_c)), dims_c(1:size(dims_c)))
 
     if (product(dims_f) > 0) then
       allocate(data_f_ptr, source=data_f)
-      allocate(dims_ptr, source=dims_f)
+      allocate(dims_ptr, source=dims_c)
       data = c_loc(data_f_ptr(1))
       dims = c_loc(dims_ptr(1))
     end if
