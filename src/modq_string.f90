@@ -58,7 +58,7 @@ contains
     class(String), intent(in) :: self
     character(len=:), allocatable :: chars
 
-    chars = self%char_buffer
+    allocate(chars, source=self%char_buffer)
   end function string__get_chars
 
 
@@ -88,11 +88,11 @@ contains
     character(len=:), allocatable :: tmp_char_buffer
     integer :: new_length
 
-    new_length = len(self%char_buffer) + len(str%chars())
+    new_length = len(self%char_buffer) + len(str%char_buffer)
     allocate(character(len=new_length) :: tmp_char_buffer)
     tmp_char_buffer(1:len(self%char_buffer)) = self%char_buffer(1:len(self%char_buffer))
-    tmp_char_buffer(len(self%char_buffer) + 1 : len(tmp_char_buffer)) = str%chars()
-    deallocate(self%char_buffer)
+    tmp_char_buffer(len(self%char_buffer) + 1 : len(tmp_char_buffer)) = str%char_buffer
+    if (allocated(self%char_buffer)) deallocate(self%char_buffer)
     call move_alloc(tmp_char_buffer, self%char_buffer)
   end subroutine string__append
 

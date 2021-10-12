@@ -46,6 +46,13 @@ void test_get_data_mhs()
     auto latitude = result_set.get("latitude");
     auto longitude = result_set.get("longitude");
 
+    std::cout << "Path Strings:" << std::endl;
+    for (auto dim_path : latitude->dimPaths)
+    {
+        std::cout << "  " << dim_path << std::endl;
+    }
+    std::cout << std::endl;
+
     print("Latitude", latitude);
     print("Longitude", longitude);
 
@@ -72,5 +79,6 @@ void test_get_data_chars()
 
 int main()
 {
+//    test_get_data_mhs();
     test_get_data_chars();
 }

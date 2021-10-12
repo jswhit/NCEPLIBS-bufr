@@ -24,6 +24,7 @@ module modq_result_set
     real(kind=8), allocatable :: data(:)
     integer, allocatable :: seq_path(:)
     type(SeqCounts), allocatable :: seq_counts(:)
+    character(len=:), allocatable :: dim_paths(:)
 
   contains
     final :: data_field__delete
@@ -59,7 +60,7 @@ module modq_result_set
       procedure, public :: get_2d => result_set__get_2d
       procedure, public :: get_3d => result_set__get_3d
       procedure, public :: get_4d => result_set__get_4d
-      procedure, public :: get_chars => result_set__get_chars   
+      procedure, public :: get_chars => result_set__get_chars
       procedure, public :: get_raw_values => result_set__get_raw_values
       procedure, public :: is_string => result_set__is_string
       procedure, public :: add => result_set__add
@@ -82,7 +83,7 @@ contains
   ! Data Field Procedures
   type(DataField) function initialize__data_field() result(data_field)
     ! Needed because of gfortran bug
-    data_field = DataField(String(""), String(""), .false., .false., null(), null(), null())
+    data_field = DataField(String(""), String(""), .false., .false., null(), null(), null(), null())
 
     allocate(data_field%data(0))
     allocate(data_field%seq_path(0))
@@ -393,12 +394,14 @@ contains
   end subroutine
 
 
-  subroutine result_set__get_raw_values(self, field_name, data, dims, group_by)
+
+  subroutine result_set__get_raw_values(self, field_name, data, dims, group_by, dim_paths)
     class(ResultSet), intent(in) :: self
     character(len=*), intent(in) :: field_name
     real(kind=8), allocatable, intent(out) :: data(:)
     integer, allocatable, intent(out) :: dims(:)
     character(len=*), intent(in), optional :: group_by
+    character(len=:), allocatable, intent(out), optional :: dim_paths(:)
 
     type(DataField) :: target_field, group_by_field
     integer :: total_rows
@@ -416,6 +419,11 @@ contains
 
       dims_list = IntList()
       groupby_idx = 1
+
+      if (present(dim_paths) .and. self%data_frames_size > 0) then
+        target_field = self%data_frames(1)%field_for_node_named(String(field_name))
+        allocate(dim_paths, source=target_field%dim_paths)
+      end if
 
       !  Go through the all the frames and find the max of all dimensions and the repetition index of the
       !  groupby field.
@@ -435,6 +443,10 @@ contains
         if (present(group_by).and. group_by /= "") then
           group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
           groupby_idx = max(groupby_idx, size(group_by_field%seq_counts))
+
+          if (present(dim_paths)) then
+            dim_paths = target_field%dim_paths(groupby_idx:size(target_field%dim_paths))
+          end if
         end if
       end do
 

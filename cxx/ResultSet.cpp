@@ -33,13 +33,17 @@ namespace bufr
     {
         double* data_ptr = nullptr;
         int* dims_ptr = nullptr;
+        char* dims_paths_ptr = nullptr;
         int num_dims = 0;
+        int dim_paths_str_len = 0;
         result_set__get_raw_f(class_data_ptr_,
                               field_name.c_str(),
                               group_by_field.c_str(),
                               &data_ptr,
                               &dims_ptr,
-                              &num_dims);
+                              &num_dims,
+                              &dims_paths_ptr,
+                              &dim_paths_str_len);
 
         bool isString = result_set__is_string_f(class_data_ptr_, field_name.c_str());
         std::shared_ptr<ResultBase> result;
@@ -51,8 +55,7 @@ namespace bufr
             const char* char_ptr = (char*) data_ptr;
             for (int row_idx = 0; row_idx < dims_ptr[0]; row_idx++)
             {
-                std::string str = std::string(char_ptr + row_idx * dims_ptr[1] * sizeof(double),
-                                              dims_ptr[1] * sizeof(double));
+                std::string str = std::string(char_ptr + row_idx * sizeof(double), sizeof(double));
 
                 // trim trailing whitespace from str
                 str.erase(std::find_if(str.rbegin(), str.rend(),
@@ -64,6 +67,7 @@ namespace bufr
             auto strResult = std::make_shared<Result<std::string>>();
             strResult->data = data;
             strResult->dims.push_back(dims_ptr[0]);
+
             result = strResult;
         }
         else
@@ -79,6 +83,17 @@ namespace bufr
             floatResult->data = std::vector<float>(data_ptr, data_ptr + tot_elements);
             floatResult->dims = std::vector<std::size_t>(dims_ptr, dims_ptr + num_dims);
             result = floatResult;
+        }
+
+        // Add dim path strings
+        const char* ws = " \t\n\r\f\v";
+        for (int dim_idx = 0; dim_idx < num_dims; dim_idx++)
+        {
+            auto path_str = std::string(dims_paths_ptr + dim_idx * dim_paths_str_len, dim_paths_str_len);
+
+            // Trim extra chars from the path str
+            path_str.erase(path_str.find_last_not_of(ws) + 1);
+            result->dimPaths.push_back(path_str);
         }
 
         return result;

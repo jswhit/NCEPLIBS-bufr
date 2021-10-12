@@ -15,6 +15,9 @@
 namespace bufr
 {
     struct ResultBase {
+        std::vector<std::size_t> dims;
+        std::vector<std::string> dimPaths;
+
         virtual ~ResultBase() {}
         virtual void print() = 0;
     };
@@ -22,11 +25,13 @@ namespace bufr
     template <typename T>
     struct Result : ResultBase
     {
+        typedef T value_type;
+        
         std::vector<T> data;
-        std::vector<std::size_t> dims;
 
         void print() final
         {
+            std::cout << data.size() << std::endl;
             for (auto val : data)
             {
                 std::cout << val << ", ";

@@ -31,7 +31,9 @@ extern "C" {
                                 const char* group_by_field,
                                 double** data,
                                 int** dims,
-                                int* num_dims);
+                                int* num_dims,
+                                char** dim_paths,
+                                int* dim_paths_str_len);
 
     bool result_set__is_string_f(void* cls, const char* field);
 

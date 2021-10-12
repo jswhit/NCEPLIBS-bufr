@@ -81,22 +81,26 @@ module query_interface
   end subroutine result_set__allocate
 
 
-  subroutine result_set__get_raw_c(cls, field, group_by_field, data, dims, num_dims) &
+  subroutine result_set__get_raw_c(cls, field, group_by_field, data, dims, num_dims, dim_paths, dim_paths_str_len) &
     bind(C, name="result_set__get_raw_f")
 
     type(c_ptr), intent(inout) :: cls
     character(kind=c_char, len=1), intent(in) :: field
     character(kind=c_char, len=1), intent(in) :: group_by_field
     type(c_ptr), intent(inout) :: data
-    type(c_ptr), allocatable, intent(inout) :: dims(:)
+    type(c_ptr), intent(inout) :: dims
     integer(kind=c_int), intent(out) :: num_dims
+    type(c_ptr), intent(inout) :: dim_paths
+    integer(kind=c_int), intent(out) :: dim_paths_str_len
 
     character(len=:), allocatable :: f_field, f_group_by_field
     real(kind=8), allocatable :: data_f(:)
     integer, allocatable :: dims_f(:)
+    character(len=:), allocatable :: dim_paths_f(:)
     real(kind=8), pointer :: data_f_ptr(:)
     integer(kind=c_int), pointer :: dims_ptr(:)
     integer(kind=c_int), allocatable :: dims_c(:)
+    character(kind=c_char, len=1), pointer :: dims_path_ptr(:)
 
     type(ResultSet), pointer :: result_set_fptr
     call c_f_pointer(cls, result_set_fptr)
@@ -104,7 +108,7 @@ module query_interface
     f_field = c_f_string(field)
     f_group_by_field = c_f_string(group_by_field)
 
-    call result_set_fptr%get_raw_values(f_field, data_f, dims_f, f_group_by_field)
+    call result_set_fptr%get_raw_values(f_field, data_f, dims_f, f_group_by_field, dim_paths_f)
 
     num_dims = size(dims_f, kind=c_int)
     allocate(dims_c(size(dims_f)))
@@ -113,10 +117,12 @@ module query_interface
     if (product(dims_f) > 0) then
       allocate(data_f_ptr, source=data_f)
       allocate(dims_ptr, source=dims_c)
+      allocate(dims_path_ptr, source=dim_paths_f)
       data = c_loc(data_f_ptr(1))
       dims = c_loc(dims_ptr(1))
+      dim_paths = c_loc(dims_path_ptr(1))
+      dim_paths_str_len = len(dims_path_ptr(1))
     end if
-
   end subroutine result_set__get_raw_c
 
 
