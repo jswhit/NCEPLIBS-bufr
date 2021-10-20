@@ -65,9 +65,10 @@ namespace bufr
             }
 
             auto strResult = std::make_shared<Result<std::string>>();
+            strResult->field_name = field_name;
+            strResult->group_by_field_name = group_by_field;
             strResult->data = data;
             strResult->dims.push_back(dims_ptr[0]);
-
             result = strResult;
         }
         else
@@ -80,6 +81,8 @@ namespace bufr
             }
 
             auto floatResult = std::make_shared<Result<float>>();
+            floatResult->field_name = field_name;
+            floatResult->group_by_field_name = group_by_field;
             floatResult->data = std::vector<float>(data_ptr, data_ptr + tot_elements);
             floatResult->dims = std::vector<std::size_t>(dims_ptr, dims_ptr + num_dims);
             result = floatResult;

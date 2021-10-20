@@ -164,10 +164,10 @@ subroutine test__query_radiance
   open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gdas.t18z.1bmhs.tm00.bufr_d")
   call openbf(lunit, "IN", lunit)
 
-  call query_set%add("*/CLAT", "latitude")
-  call query_set%add("*/CLON", "longitude")
-  call query_set%add("[*/BRITCSTC/TMBR, */BRIT/TMBR]", "radiance")
-  call query_set%add("[*/BRITCSTC/CHNM, */BRIT/CHNM]", "channel")
+!  call query_set%add("*/CLAT", "latitude")
+!  call query_set%add("*/CLON", "longitude")
+  call query_set%add("[*/BRITCSTC/TMBAR, */BRIT/TMBAR]", "radiance")
+!  call query_set%add("[*/BRITCSTC/CHNM, */BRIT/CHNM]", "channel")
 
 !  print *, "Num Messages", count_msgs(lunit)
   result_set = execute(lunit, query_set, next=1)

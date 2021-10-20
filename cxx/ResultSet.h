@@ -15,6 +15,8 @@
 namespace bufr
 {
     struct ResultBase {
+        std::string field_name;
+        std::string group_by_field_name;
         std::vector<std::size_t> dims;
         std::vector<std::string> dimPaths;
 

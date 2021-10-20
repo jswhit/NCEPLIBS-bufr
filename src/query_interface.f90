@@ -90,17 +90,16 @@ module query_interface
     type(c_ptr), intent(inout) :: data
     type(c_ptr), intent(inout) :: dims
     integer(kind=c_int), intent(out) :: num_dims
-    type(c_ptr), intent(inout) :: dim_paths
+    type(c_ptr), intent(out) :: dim_paths
     integer(kind=c_int), intent(out) :: dim_paths_str_len
 
     character(len=:), allocatable :: f_field, f_group_by_field
     real(kind=8), allocatable :: data_f(:)
     integer, allocatable :: dims_f(:)
-    character(len=:), allocatable :: dim_paths_f(:)
+    character(len=:), save, allocatable, target :: dim_paths_f(:)
     real(kind=8), pointer :: data_f_ptr(:)
     integer(kind=c_int), pointer :: dims_ptr(:)
     integer(kind=c_int), allocatable :: dims_c(:)
-    character(kind=c_char, len=1), pointer :: dims_path_ptr(:)
 
     type(ResultSet), pointer :: result_set_fptr
     call c_f_pointer(cls, result_set_fptr)
@@ -117,11 +116,10 @@ module query_interface
     if (product(dims_f) > 0) then
       allocate(data_f_ptr, source=data_f)
       allocate(dims_ptr, source=dims_c)
-      allocate(dims_path_ptr, source=dim_paths_f)
       data = c_loc(data_f_ptr(1))
       dims = c_loc(dims_ptr(1))
-      dim_paths = c_loc(dims_path_ptr(1))
-      dim_paths_str_len = len(dims_path_ptr(1))
+      dim_paths = c_loc(dim_paths_f)
+      dim_paths_str_len = len(dim_paths_f(1))
     end if
   end subroutine result_set__get_raw_c
 

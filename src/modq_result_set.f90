@@ -417,6 +417,8 @@ contains
       integer :: dims_len
       type(IntList) :: dims_list
 
+      integer, allocatable :: c(:)
+
       dims_list = IntList()
       groupby_idx = 1
 

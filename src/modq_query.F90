@@ -315,7 +315,12 @@ contains
     end if
 
     targ = Target(name, query_str, is_string, branches, target_nodes, null())
-    allocate(targ%dim_paths, source=dim_paths)
+
+    if (size(target_nodes) > 0) then
+      allocate(targ%dim_paths, source=dim_paths)
+    else
+      allocate(character(len=10)::targ%dim_paths(0))
+    end if
 
     deallocate(mnemonics)
   end function  
@@ -420,6 +425,8 @@ contains
         data_field%query_str = String(targ%query_str)
         data_field%data = dat
         data_field%missing = .true.
+        allocate(data_field%dim_paths, source=targ%dim_paths)
+        allocate(data_field%seq_counts(0))
         call data_frame%add(data_field)
         cycle
       end if
