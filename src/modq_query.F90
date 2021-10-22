@@ -13,6 +13,7 @@ module modq_query
   use modq_list
   use modq_query_set
   use modq_result_set
+  use modq_string
   use modq_query_parser
 
   implicit none
@@ -35,6 +36,8 @@ module modq_query
     integer, allocatable :: seq_path(:)
     !> @brief The list of node ID's associated with this target
     integer, allocatable :: node_ids(:)
+    !> @brief List of query paths which define the datas dimensions
+    character(len=:), allocatable :: dim_paths(:)
   end type Target
 
   !> @author Ronald Mclaren
@@ -198,6 +201,7 @@ contains
     integer, allocatable :: branches(:)
     logical :: is_missing_target
     type(IntList) :: seq_path
+    character(len=:), allocatable :: dim_paths(:)
 
     call split_query_str(query_str, subset, mnemonics, index)
 
@@ -245,6 +249,7 @@ contains
           ! We found a target
           target_nodes = [target_nodes, node_idx]
           is_string = (itp(node_idx) == 3)
+          dim_paths = get_dim_paths(branches, mnemonic_cursor)
 
           ! Neccessary cause Fortran handles .and. in if statements in a strange way
           if (seq_path%length() > 1) then
@@ -309,9 +314,67 @@ contains
       end if
     end if
 
-    targ = Target(name, query_str, is_string, branches, target_nodes)
+    targ = Target(name, query_str, is_string, branches, target_nodes, null())
+
+    if (size(target_nodes) > 0) then
+      allocate(targ%dim_paths, source=dim_paths)
+    else
+      allocate(character(len=10)::targ%dim_paths(0))
+    end if
 
     deallocate(mnemonics)
+  end function  
+  
+  
+  !> @author Ronald Mclaren
+  !> @date 2021-09-06
+  !>
+  !> @brief Gets a list of strings for the sub-path to each dimension in the data.
+  !>
+  !> @param[in] branches - type(String)(:): The list of branch idxs to use
+  !>
+  function get_dim_paths(branches, mnemonic_cursor) result(dim_paths)
+    integer, intent(in) :: branches(:)
+    integer, intent(in) :: mnemonic_cursor
+    character(len=:), allocatable :: dim_paths(:)
+
+    integer :: branch_idx
+    integer :: dim_idx
+    integer :: mnemonic_idx
+    integer :: node_idx
+    type(IntList), allocatable :: dim_path_node_idxs(:)
+    type(String) :: current_dim_path
+    character(len=10) :: mnemonic_str
+
+    ! Allocate enough int lists to accomadate the worst case scenario
+    allocate(dim_path_node_idxs(mnemonic_cursor))
+
+    ! Allocate enough memory to hold all the dim paths
+    allocate(character(len=size(branches)*10 + size(branches) + 1) :: dim_paths(size(branches) + 1))
+    dim_paths = " "
+
+    dim_idx = 1
+    current_dim_path = String("*")
+    dim_paths(dim_idx)(1:len(current_dim_path%chars())) = current_dim_path%chars()
+
+    ! Split the branches into node idxs for each additional dimension
+    if (mnemonic_cursor > 0) then
+      do branch_idx = 1, mnemonic_cursor+1
+        node_idx = branches(branch_idx)
+
+        mnemonic_str = tag(node_idx)
+
+        call current_dim_path%append(String("/" // mnemonic_str(2:len(trim(mnemonic_str)) - 1)))
+
+        if (typ(node_idx) == DelayedRep .or. &
+            typ(node_idx) == FixedRep .or. &
+            typ(node_idx) == DelayedRepStacked) then
+
+          dim_idx = dim_idx + 1
+          dim_paths(dim_idx)(1:len(current_dim_path%chars())) = current_dim_path%chars()
+        end if
+      end do
+    end if
   end function
 
 
@@ -362,6 +425,8 @@ contains
         data_field%query_str = String(targ%query_str)
         data_field%data = dat
         data_field%missing = .true.
+        allocate(data_field%dim_paths, source=targ%dim_paths)
+        allocate(data_field%seq_counts(0))
         call data_frame%add(data_field)
         cycle
       end if
@@ -427,15 +492,15 @@ contains
 
       allocate(data_field%seq_path, source=seq_counter%seqs%array())
 
-      if (allocated(data_field%seq_counts)) then
-        deallocate(data_field%seq_counts)
-      end if
-
+      if (allocated(data_field%seq_counts)) deallocate(data_field%seq_counts)
       allocate(data_field%seq_counts(size(data_field%seq_path)))
       do path_idx = 1, size(data_field%seq_path)
         allocate(data_field%seq_counts(path_idx)%counts, &
                  source=seq_counter%counts_list(path_idx)%array())
       end do
+
+      if (allocated(data_field%dim_paths)) deallocate(data_field%dim_paths)
+      allocate(data_field%dim_paths, source=targ%dim_paths)
 
       call seq_counter%delete()
       call data_frame%add(data_field)

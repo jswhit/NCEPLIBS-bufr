@@ -12,7 +12,7 @@ module test_query_root
       integer, parameter :: FileUnit = 12
 
       type(TestInstance) :: test
-      real(kind=8), allocatable :: old_interface_data(:), query_interface_data(:, :, :)
+      real(kind=8), allocatable :: old_interface_data(:), query_interface_data(:)
 
       test = TestInstance("test__get_root_data")
 
@@ -69,7 +69,7 @@ module test_query_root
         ! Use query interface to get the same data
         call query_set%add("*/YOB", "latitude")
         result_set = execute(FileUnit, query_set)
-        query_interface_data = result_set%get("latitude")
+        query_interface_data = result_set%get_1d("latitude")
       end block  ! Query Interface
 
 !      print *, "Old", old_interface_data
@@ -90,7 +90,7 @@ module test_query_root
       integer, parameter :: FileUnit = 12
 
       type(TestInstance) :: test
-      real(kind=8), allocatable :: old_interface_data(:), query_interface_data(:, :, :)
+      real(kind=8), allocatable :: old_interface_data(:), query_interface_data(:)
 
       test = TestInstance("test__get_root_missing_data")
 
@@ -148,7 +148,7 @@ module test_query_root
         ! Use query interface to get the same data
         call query_set%add("*/ABC", "latitude")
         result_set = execute(FileUnit, query_set)
-        query_interface_data = result_set%get("latitude")
+        query_interface_data = result_set%get_1d("latitude")
       end block  ! Query Interface
 
 !      print *, "Old", old_interface_data
@@ -169,7 +169,7 @@ module test_query_root
       integer, parameter :: FileUnit = 12
 
       type(TestInstance) :: test
-      real(kind=8), allocatable :: old_interface_data(:), query_interface_data(:,:,:)
+      real(kind=8), allocatable :: old_interface_data(:), query_interface_data(:)
 
       test = TestInstance("test__get_root_for_seq")
 
@@ -228,7 +228,7 @@ module test_query_root
         call query_set%add("*/YOB", "latitude")
         call query_set%add("*/PRSLEVEL/CAT", "data_level_category")
         result_set = execute(FileUnit, query_set)
-        query_interface_data = result_set%get("latitude", group_by="data_level_category")
+        query_interface_data = result_set%get_1d("latitude", group_by="data_level_category")
       end block  ! Query Interface
 
       !      print *, "Old", old_interface_data

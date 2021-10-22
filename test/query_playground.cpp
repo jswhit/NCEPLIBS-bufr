@@ -35,6 +35,8 @@ void test_get_data_mhs()
 //    query_set.add("*/HOLS", "height");
     query_set.add("*/CLAT", "latitude");
     query_set.add("*/CLON", "longitude");
+    query_set.add("*/BRITCSTC/TMBR", "radiance");
+
 //    query_set.add("*/LSQL", "lsql");
 //    query_set.add("*/SOLAZI", "saz");
 //    query_set.add("*/SOZA", "sza");
@@ -43,11 +45,19 @@ void test_get_data_mhs()
 //
     auto result_set = file.execute(query_set, 15);
 //
-    auto latitude = result_set.get("latitude");
-    auto longitude = result_set.get("longitude");
+//    auto latitude = result_set.get("latitude");
+//    auto longitude = result_set.get("longitude");
+    auto radiance = result_set.get("radiance");
 
-    print("Latitude", latitude);
-    print("Longitude", longitude);
+//    std::cout << "Path Strings:" << std::endl;
+//    for (auto dim_path : latitude->dimPaths)
+//    {
+//        std::cout << "  " << dim_path << std::endl;
+//    }
+//    std::cout << std::endl;
+//
+//    print("Latitude", latitude);
+//    print("Longitude", longitude);
 
     file.close();
 }
@@ -72,5 +82,6 @@ void test_get_data_chars()
 
 int main()
 {
-    test_get_data_chars();
+    test_get_data_mhs();
+//    test_get_data_chars();
 }

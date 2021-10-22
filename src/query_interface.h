@@ -24,13 +24,16 @@ extern "C" {
     // ResultSet Methods
     void result_set__allocate_f(void** result_set);
 
+    // cls, field, group_by_field, data, dims, num_dims
+
     void result_set__get_raw_f(void* cls,
                                 const char* field,
                                 const char* group_by_field,
                                 double** data,
-                                std::size_t* dim_rows,
-                                std::size_t* dim_cols,
-                                std::size_t* dim_z);
+                                int** dims,
+                                int* num_dims,
+                                char** dim_paths,
+                                int* dim_paths_str_len);
 
     bool result_set__is_string_f(void* cls, const char* field);
 
