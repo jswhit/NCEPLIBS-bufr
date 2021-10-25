@@ -359,9 +359,8 @@ contains
 
     ! Split the branches into node idxs for each additional dimension
     if (mnemonic_cursor > 0) then
-      do branch_idx = 1, mnemonic_cursor+1
+      do branch_idx = 1, mnemonic_cursor
         node_idx = branches(branch_idx)
-
         mnemonic_str = tag(node_idx)
 
         call current_dim_path%append(String("/" // mnemonic_str(2:len(trim(mnemonic_str)) - 1)))
@@ -405,6 +404,8 @@ contains
     type(SeqCounter) :: seq_counter
     type(Target), pointer :: targ
 
+    integer :: idx
+
     do target_idx = 1, size(targets)
       targ => targets(target_idx)
       
@@ -426,7 +427,8 @@ contains
         data_field%data = dat
         data_field%missing = .true.
         allocate(data_field%dim_paths, source=targ%dim_paths)
-        allocate(data_field%seq_counts(0))
+        allocate(data_field%seq_counts(1))
+        data_field%seq_counts(1)%counts = [1]
         call data_frame%add(data_field)
         cycle
       end if
@@ -461,7 +463,6 @@ contains
           if (node_idx == rep_node_idx) then
             call seq_counter%inc_last_cnt_for_seq(rep_node_idx)
           else if (node_idx == link(targ%seq_path(path_cursor))) then
-            call seq_counter%dec_last_cnt_for_seq(rep_node_idx)
             path_cursor = path_cursor - 1
           else if (path_cursor == size(targ%seq_path)) then
             continue

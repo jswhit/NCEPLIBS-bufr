@@ -142,6 +142,8 @@ module query_interface
     type(c_ptr), value :: result_set_cptr
     type(ResultSet), pointer :: result_set_fptr
 
+!    result_set_fptr => null()
+
     call c_f_pointer(result_set_cptr, result_set_fptr)
     deallocate(result_set_fptr)
   end subroutine result_set__deallocate
