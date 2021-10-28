@@ -33,9 +33,9 @@ void test_get_data_mhs()
     auto query_set = bufr::QuerySet();
 //    query_set.add("*/FOVN", "fovn");
 //    query_set.add("*/HOLS", "height");
-    query_set.add("*/CLAT", "latitude");
-    query_set.add("*/CLON", "longitude");
-    query_set.add("*/BRITCSTC/TMBR", "radiance");
+//    query_set.add("*/CLAT", "latitude");
+//    query_set.add("*/CLON", "longitude");
+    query_set.add("*/BRITCSTC/TMBRA", "radiance");
 
 //    query_set.add("*/LSQL", "lsql");
 //    query_set.add("*/SOLAZI", "saz");

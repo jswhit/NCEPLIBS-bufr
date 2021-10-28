@@ -166,7 +166,7 @@ subroutine test__query_radiance
 
 !  call query_set%add("*/CLAT", "latitude")
 !  call query_set%add("*/CLON", "longitude")
-  call query_set%add("[*/BRITCSTC/TMBAR, */BRIT/TMBAR]", "radiance")
+  call query_set%add("[*/BRITCSTC/TMBR, */BRIT/TMBR]", "radiance")
 !  call query_set%add("[*/BRITCSTC/CHNM, */BRIT/CHNM]", "channel")
 
 !  print *, "Num Messages", count_msgs(lunit)
@@ -178,12 +178,10 @@ subroutine test__query_radiance
    call result_set%get_raw_values("radiance", data, dims, dim_paths=dim_paths)
 !  data = result_set%get_2d("radiance", group_by="longitude")
 
-  print *, dim_paths
-
   t_dims = shape(data)
   
-  print *, "Dims", t_dims
-  do idx = 1, t_dims(1)
+  print *, "Dims", t_dims, dims
+  do idx = 1, size(data)
     print *, data(idx)
   end do
 
@@ -397,6 +395,90 @@ subroutine test_adpsfc
   close(lunit)
 end subroutine test_adpsfc
 
+subroutine test_iasi
+  use modq_execute
+  use modq_query_set
+  use modq_result_set
+  implicit none
+
+  integer, parameter :: lunit = 12
+
+  type(QuerySet) :: query_set
+  type(ResultSet) :: result_set
+  real(kind=8), allocatable :: dat(:,:,:)
+  real(kind=8), allocatable :: data(:)
+  integer, allocatable :: dims(:)
+
+  real(kind=8), allocatable :: dat_out(:,:)
+  integer :: idx
+  integer :: t_dims(1)
+  character(len=:), allocatable :: dim_paths(:)
+
+
+  !  open(lunit,
+  !  file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gnssro_kompsat5_20180415_00Z.bufr")
+  open(lunit, file="/home/rmclaren/Data/gdas.t00z.mtiasi.tm00.bufr_d")
+  call openbf(lunit, "IN", lunit)
+
+  call query_set%add("*/IASIL1CB/STCH", "startChannel")
+  call query_set%add("*/IASIL1CS/AVHRCHN/SMRA", "a1")
+
+  result_set = execute(lunit, query_set, next=20)
+  call result_set%get_raw_values("startChannel", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("a1", data, dims, dim_paths=dim_paths)
+
+
+  t_dims = shape(data)
+
+  print *, "Dims", dims
+
+  call closbf(lunit)
+  close(lunit)
+end subroutine test_iasi
+
+
+subroutine test_adpupa
+  use modq_execute
+  use modq_query_set
+  use modq_result_set
+  implicit none
+
+  integer, parameter :: lunit = 12
+
+  type(QuerySet) :: query_set
+  type(ResultSet) :: result_set
+  real(kind=8), allocatable :: dat(:,:,:)
+  real(kind=8), allocatable :: data(:)
+  integer, allocatable :: dims(:)
+
+  real(kind=8), allocatable :: dat_out(:,:)
+  integer :: idx
+  integer :: t_dims(1)
+  character(len=:), allocatable :: dim_paths(:)
+
+
+  !  open(lunit,
+  !  file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gnssro_kompsat5_20180415_00Z.bufr")
+  open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/ADPUPA.prepbufr")
+  call openbf(lunit, "IN", lunit)
+
+  call query_set%add("*/PRSLEVEL/T___INFO/TVO", "tvo")
+
+  result_set = execute(lunit, query_set, next=20)
+  call result_set%get_raw_values("tvo", data, dims, dim_paths=dim_paths)
+
+  do idx = 1, size(dim_paths)
+    print *, dim_paths(idx)
+  end do
+
+  t_dims = shape(data)
+  print *, "Dims", dims
+
+  call closbf(lunit)
+  close(lunit)
+
+end subroutine test_adpupa
+
 
 program test_query
   use modq_table
@@ -409,10 +491,12 @@ program test_query
 !  call test__query_ia5
 !  call test_int_list
 !  call test_query_parser
-  call test__query_radiance
+!  call test__query_radiance
 !call test__query_gnssro
 !  call test_adpsfc
   ! call test_table
+!  call test_iasi
+  call test_adpupa
 end program test_query
 
 

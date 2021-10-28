@@ -38,6 +38,8 @@ module modq_query
     integer, allocatable :: node_ids(:)
     !> @brief List of query paths which define the datas dimensions
     character(len=:), allocatable :: dim_paths(:)
+    !> @brief List of branch idxs of dimensioned elements.
+    integer, allocatable :: export_dim_idxs(:)
   end type Target
 
   !> @author Ronald Mclaren
@@ -202,6 +204,7 @@ contains
     logical :: is_missing_target
     type(IntList) :: seq_path
     character(len=:), allocatable :: dim_paths(:)
+    integer, allocatable :: dim_idxs(:)
 
     call split_query_str(query_str, subset, mnemonics, index)
 
@@ -249,7 +252,8 @@ contains
           ! We found a target
           target_nodes = [target_nodes, node_idx]
           is_string = (itp(node_idx) == 3)
-          dim_paths = get_dim_paths(branches, mnemonic_cursor)
+
+          call get_dim_info(branches, mnemonic_cursor, dim_paths, dim_idxs)
 
           ! Neccessary cause Fortran handles .and. in if statements in a strange way
           if (seq_path%length() > 1) then
@@ -314,12 +318,14 @@ contains
       end if
     end if
 
-    targ = Target(name, query_str, is_string, branches, target_nodes, null())
+    targ = Target(name, query_str, is_string, branches, target_nodes, null(), null())
 
     if (size(target_nodes) > 0) then
       allocate(targ%dim_paths, source=dim_paths)
+      allocate(targ%export_dim_idxs, source=dim_idxs)
     else
       allocate(character(len=10)::targ%dim_paths(0))
+      allocate(targ%export_dim_idxs(0))
     end if
 
     deallocate(mnemonics)
@@ -333,10 +339,11 @@ contains
   !>
   !> @param[in] branches - type(String)(:): The list of branch idxs to use
   !>
-  function get_dim_paths(branches, mnemonic_cursor) result(dim_paths)
+  subroutine get_dim_info(branches, mnemonic_cursor, dim_paths, dim_idxs)
     integer, intent(in) :: branches(:)
     integer, intent(in) :: mnemonic_cursor
-    character(len=:), allocatable :: dim_paths(:)
+    character(len=:), allocatable, intent(out) :: dim_paths(:)
+    integer, allocatable, intent(out) :: dim_idxs(:)
 
     integer :: branch_idx
     integer :: dim_idx
@@ -345,6 +352,9 @@ contains
     type(IntList), allocatable :: dim_path_node_idxs(:)
     type(String) :: current_dim_path
     character(len=10) :: mnemonic_str
+    type(IntList) :: dim_idx_list
+
+    dim_idx_list = IntList()
 
     ! Allocate enough int lists to accomadate the worst case scenario
     allocate(dim_path_node_idxs(mnemonic_cursor))
@@ -356,6 +366,7 @@ contains
     dim_idx = 1
     current_dim_path = String("*")
     dim_paths(dim_idx)(1:len(current_dim_path%chars())) = current_dim_path%chars()
+    call dim_idx_list%push(1)
 
     ! Split the branches into node idxs for each additional dimension
     if (mnemonic_cursor > 0) then
@@ -370,11 +381,14 @@ contains
             typ(node_idx) == DelayedRepStacked) then
 
           dim_idx = dim_idx + 1
+          call dim_idx_list%push(branch_idx + 1) ! +1 because of the root dimension
           dim_paths(dim_idx)(1:len(current_dim_path%chars())) = current_dim_path%chars()
         end if
       end do
     end if
-  end function
+
+    allocate(dim_idxs, source=dim_idx_list%array())
+  end subroutine get_dim_info
 
 
   !> @author Ronald Mclaren
@@ -502,6 +516,7 @@ contains
 
       if (allocated(data_field%dim_paths)) deallocate(data_field%dim_paths)
       allocate(data_field%dim_paths, source=targ%dim_paths)
+      allocate(data_field%export_dim_idxs, source=targ%export_dim_idxs)
 
       call seq_counter%delete()
       call data_frame%add(data_field)

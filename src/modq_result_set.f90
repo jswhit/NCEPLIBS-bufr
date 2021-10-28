@@ -24,7 +24,12 @@ module modq_result_set
     real(kind=8), allocatable :: data(:)
     integer, allocatable :: seq_path(:)
     type(SeqCounts), allocatable :: seq_counts(:)
+
+    ! The sub paths that represent a dimension.
     character(len=:), allocatable :: dim_paths(:)
+    ! Keeps track of the idxs of dimensions in seq_counts (not all levels in seq_counts represent a new dimension).
+    ! These line up with the dimension paths.
+    integer, allocatable :: export_dim_idxs(:)
 
   contains
     final :: data_field__delete
@@ -480,6 +485,7 @@ contains
       integer :: data_row_idx
       integer :: row_idx
       integer :: row_length
+      integer, allocatable :: export_dims(:)
 
       row_length = product(dims(2:size(dims)))
 
@@ -488,6 +494,7 @@ contains
 
       do frame_idx = 1, self%data_frames_size
         target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
+        export_dims = target_field%export_dim_idxs
 
         if (.not. target_field%missing) then
           if (present(group_by) .and. group_by /= "") then
@@ -514,6 +521,12 @@ contains
 
       ! Convert dims per data frame to dims for all the collected data.
       dims(1) = total_rows
+      ! Throw away dims we don't want. These will be dims associated with binary reps
+      ! ex: "<ABC>" who are repeated at most once.
+      if (self%data_frames_size > 1) then
+        dims = dims(export_dims)
+      end if
+
     end block  ! Make data set
   end subroutine
 
