@@ -99,6 +99,8 @@ namespace bufr
             result->dimPaths.push_back(path_str);
         }
 
+        free_result_get_data_f();
+
         return result;
     }
 

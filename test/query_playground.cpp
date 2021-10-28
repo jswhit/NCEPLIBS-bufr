@@ -35,7 +35,7 @@ void test_get_data_mhs()
 //    query_set.add("*/HOLS", "height");
 //    query_set.add("*/CLAT", "latitude");
 //    query_set.add("*/CLON", "longitude");
-    query_set.add("*/BRITCSTC/TMBRA", "radiance");
+    query_set.add("*/BRITCSTC/TMBR", "radiance");
 
 //    query_set.add("*/LSQL", "lsql");
 //    query_set.add("*/SOLAZI", "saz");
@@ -56,7 +56,7 @@ void test_get_data_mhs()
 //    }
 //    std::cout << std::endl;
 //
-//    print("Latitude", latitude);
+    print("Radiance", radiance);
 //    print("Longitude", longitude);
 
     file.close();

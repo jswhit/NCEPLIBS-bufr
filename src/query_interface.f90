@@ -7,6 +7,10 @@ module query_interface
   use iso_c_binding
   implicit none
 
+  real(kind=c_double), allocatable, target, save :: data_f_ptr(:)
+  integer(kind=c_int), allocatable, target, save :: dims_ptr(:)
+  character(len=:), allocatable, target, save :: dim_paths_f(:)
+
   contains
 
 ! Query Set Methods
@@ -96,9 +100,7 @@ module query_interface
     character(len=:), allocatable :: f_field, f_group_by_field
     real(kind=8), allocatable :: data_f(:)
     integer, allocatable :: dims_f(:)
-    character(len=:), save, allocatable, target :: dim_paths_f(:)
-    real(kind=8), pointer :: data_f_ptr(:)
-    integer(kind=c_int), pointer :: dims_ptr(:)
+
     integer(kind=c_int), allocatable :: dims_c(:)
 
     type(ResultSet), pointer :: result_set_fptr
@@ -147,5 +149,12 @@ module query_interface
     call c_f_pointer(result_set_cptr, result_set_fptr)
     deallocate(result_set_fptr)
   end subroutine result_set__deallocate
+
+
+  subroutine free_result_get_data_c() bind(C, name='free_result_get_data_f')
+    if (allocated(data_f_ptr)) deallocate(data_f_ptr)
+    if (allocated(dims_ptr)) deallocate(dims_ptr)
+    if (allocated(dim_paths_f)) deallocate(dim_paths_f)
+  end subroutine free_result_get_data_c
 
 end module query_interface

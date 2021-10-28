@@ -39,6 +39,8 @@ extern "C" {
 
     void result_set__deallocate_f(void* result_set);
 
+    void free_result_get_data_f();
+
 #ifdef __cplusplus
 }
 #endif
