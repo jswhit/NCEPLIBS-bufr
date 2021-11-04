@@ -417,8 +417,8 @@ contains
     type(DataFrame) :: data_frame
     type(SeqCounter) :: seq_counter
     type(Target), pointer :: targ
+    integer :: last_node_idx_in_seq
 
-    integer :: idx
 
     do target_idx = 1, size(targets)
       targ => targets(target_idx)
@@ -459,6 +459,8 @@ contains
       collected_data_cursor = 1
 
       seq_counter = SeqCounter()
+
+      ! Add the sequence count for the root sequence in the tree (its always [1]).
       call seq_counter%add_cnt_for_seq(1, 1)
 
       do data_cursor = 1, nval(lun)
@@ -470,22 +472,69 @@ contains
           collected_data_cursor = collected_data_cursor + 1
         end if
 
+        ! The following block of code is a side effect of the haphazard and inconsistent way in which NCEPLIB-bufr
+        ! records the relationship between data nodes. Delayed repeated sequence counts are recorded as values,
+        ! but fixed repeated sequence counts are not recorded in any useful way. So we end up manually counting
+        ! everything anyways. I tried to figure out how to add this information as a VAL on the node
+        ! (its missing values for fixed reps anyways). But it turns out the global variable VAL is being changed in
+        ! multiple places (different functions in different files hammer on this thing) so I don't know what the side
+        ! effects would be. Also getting the table information would add a lot of overhead to these functions and its
+        ! tricky because indices don't neccesarily line up the way youd want.
+        !
+        ! There are other inconsistences as well. For example fixed reps "REP" have 1 corresponding SEQ element for
+        ! each repeated sequence, but delayed repeats end up having one extra one at the end for some reason. Parsing
+        ! repeated sequences that happen at the very end of the message is an extra amount of fun as you can no longer
+        ! count on the LINK (gets the node id for the next node in the tree) in this situation. The LINK table for a
+        ! sequence that happens at the end of a message is always 0. The problem is that the value 0 is kind of a catch
+        ! all value (many nodes have a link value of 0). This means counting the sequences at the end of messages needs
+        ! special logic which is not needed elsewhere.
+        !
+        ! The following code keeps track of where we are within the message tree with respect to the sequences that
+        ! we care about (the ones in the sequence path) and updated the record of sequences accordingly.
+
         ! Update sequence count
         if (path_cursor > 0) then
           rep_node_idx = rep_node_idxs(path_cursor)
 
+          ! Find the node idx that corresponds to the end of the sequence we are currently in. Note that we need to do
+          ! something tricky for sequences at the end of a message.
+          if (link(targ%seq_path(path_cursor)) == 0) then
+            if (path_cursor > 1) then
+              if (inv(data_cursor + 1, lun) == rep_node_idxs(path_cursor - 1)) then
+                last_node_idx_in_seq = isc(inode(lun))
+              end if
+            else
+              last_node_idx_in_seq = -1
+            end if
+          else
+            last_node_idx_in_seq = link(targ%seq_path(path_cursor))
+          end if
+
           if (node_idx == rep_node_idx) then
+            ! We found a SEQ element for the replication we are currently in. Increment the sequence count.
             call seq_counter%inc_last_cnt_for_seq(rep_node_idx)
-          else if (node_idx == link(targ%seq_path(path_cursor))) then
+
+          else if (node_idx == last_node_idx_in_seq) then
+            ! We found the end of the replication sequence.
+
+            ! Delayed Rep nodes have an extra SEQ nodes at the end of the sequence, so we need to get rid of that.
+            if (typ(rep_node_idx - 1) == DelayedRep .or. &
+                typ(rep_node_idx - 1) == DelayedRepStacked) then
+              call seq_counter%dec_last_cnt_for_seq(rep_node_idx)
+            end if
+
+            ! Exit the sequence, we are done with this one.
             path_cursor = path_cursor - 1
           else if (path_cursor == size(targ%seq_path)) then
             continue
           else if (node_idx == targ%seq_path(path_cursor + 1)) then
+            ! We found the next replication sequence in our path. Step into it and add a sequence count.
             path_cursor = path_cursor + 1
             rep_node_idx = rep_node_idxs(path_cursor)
             call seq_counter%add_cnt_for_seq(rep_node_idx, 0)
           end if
         else if (size(targ%seq_path) >= path_cursor + 1) then
+          ! Step into the first repeated sequence and add the sequence count.
           if (node_idx == targ%seq_path(path_cursor + 1)) then
             path_cursor = path_cursor + 1
             rep_node_idx = rep_node_idxs(path_cursor)
