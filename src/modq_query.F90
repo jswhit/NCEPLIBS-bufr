@@ -443,6 +443,9 @@ contains
         allocate(data_field%dim_paths, source=targ%dim_paths)
         allocate(data_field%seq_counts(1))
         data_field%seq_counts(1)%counts = [1]
+        allocate(data_field%export_dim_idxs(1))
+        data_field%export_dim_idxs(1) = 1
+
         call data_frame%add(data_field)
         cycle
       end if
