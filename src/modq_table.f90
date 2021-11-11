@@ -121,31 +121,19 @@ contains
               ! Found a value
               query_bases(query_base_idx) =  make_query_base(current_path, String(tag(node_idx)))
               query_base_idx = query_base_idx + 1
+            end if
 
-              ! Neccessary cause Fortran handles .and. in if statements in a strange way
-              if (seq_path%length() > 1) then
-                ! Peak ahead to see if the next node is inside one of the containing sequences
-                ! then go back up the approptiate number of sequences. Sequences might end in sequences.
-                do path_idx = seq_path%length() - 1, 1, -1
-                  if (seq_path%at(path_idx) == jmpb(node_idx + 1)) then
-                    do rewind_idx = 1, seq_path%length() - path_idx
-                      ! Exit the sequence
-                      call seq_path%pop()
+            print *, tag(node_idx), tag(jmpb(node_idx + 1)), tag(link(seq_path%at(seq_path%length()) - 1))
 
-                      current_path(table_cursor) = String("")
-                      table_cursor = table_cursor - 1
-                    end do
-                    exit
-                  end if
-                end do
-              end if
-
-            else if (seq_path%length() > 1) then
+            if (seq_path%length() > 1) then
               ! Peak ahead to see if the next node is inside one of the containing sequences
               ! then go back up the approptiate number of sequences. Sequences might end in sequences.
-              do path_idx = seq_path%length() - 1, 1, -1
-                if (seq_path%at(path_idx) == jmpb(node_idx + 1)) then
 
+              do path_idx = seq_path%length() - 1, 1, -1
+                ! Check if the node idx is the next node for the current path
+                ! or if the parent node of the next node is the previous path index
+                if (node_idx == link(seq_path%at(path_idx + 1) - 1) .or. &
+                    seq_path%at(path_idx) == jmpb(node_idx + 1)) then
                   do rewind_idx = 1, seq_path%length() - path_idx
                     ! Exit the sequence
                     call seq_path%pop()
