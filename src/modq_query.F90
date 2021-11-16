@@ -77,6 +77,7 @@ module modq_query
   character(len=3), parameter :: DelayedBinary = 'DRB'
   character(len=3), parameter :: Sequence = 'SEQ'
   character(len=3), parameter :: FixedRep = 'REP'
+  character(len=3), parameter :: Repeat = 'RPC'
   public::query
 
 contains
@@ -230,74 +231,55 @@ contains
       table_cursor = 0
       mnemonic_cursor = 0
       do node_idx = inode(lun), isc(inode(lun))
-        if (typ(node_idx) == DelayedRep .or. &
-            typ(node_idx) == FixedRep .or. &
-            typ(node_idx) == DelayedRepStacked .or. &
-            typ(node_idx) == DelayedBinary) then
-          ! Enter the sequence
-          if (tag(node_idx + 1) == mnemonics(mnemonic_cursor + 1) .and. &
-              table_cursor == mnemonic_cursor) then
+        if (typ(node_idx) == Sequence .or. typ(node_idx) == Repeat) then
+          if (is_query_node(node_idx - 1)) then
+            if (tag(node_idx) == mnemonics(mnemonic_cursor + 1) .and. &
+                table_cursor == mnemonic_cursor) then
 
-            mnemonic_cursor = mnemonic_cursor + 1
-            branches(mnemonic_cursor) = node_idx
+              mnemonic_cursor = mnemonic_cursor + 1
+              branches(mnemonic_cursor) = node_idx - 1
+            end if
+
+            table_cursor = table_cursor + 1
           end if
 
-          call seq_path%push(node_idx + 1)
-          table_cursor = table_cursor + 1
+          call seq_path%push(node_idx)
 
         else if (mnemonic_cursor == size(mnemonics) - 1 .and. &
-          table_cursor == mnemonic_cursor .and. &
-          tag(node_idx) == mnemonics(size(mnemonics))) then
+                 table_cursor == mnemonic_cursor .and. &
+                 tag(node_idx) == mnemonics(size(mnemonics))) then
 
           ! We found a target
           target_nodes = [target_nodes, node_idx]
           is_string = (itp(node_idx) == 3)
 
           call get_dim_info(branches, mnemonic_cursor, dim_paths, dim_idxs)
+        end if
 
-          ! Neccessary cause Fortran handles .and. in if statements in a strange way
-          if (seq_path%length() > 1) then
-            ! Peak ahead to see if the next node is inside one of the containing sequences
-            ! then go back up the approptiate number of sequences. You may have to exit several
-            ! sequences in a row if the current sequence is the last element in the containing
-            ! sequence.
-            do path_idx = seq_path%length() - 1, 1, -1
-              if (seq_path%at(path_idx) == jmpb(node_idx + 1)) then
-                do rewind_idx = 1, seq_path%length() - path_idx
+        if (seq_path%length() > 1) then
+          ! Peak ahead to see if the next node is inside one of the containing sequences
+          ! then go back up the approptiate number of sequences. You may have to exit several
+          ! sequences in a row if the current sequence is the last element in the containing
+          ! sequence.
 
-                  ! Exit the sequence
+          do path_idx = seq_path%length() - 1, 1, -1
+            if (seq_path%at(path_idx) == jmpb(node_idx + 1)) then
+              do rewind_idx = seq_path%length(), path_idx + 1, -1
+                ! Exit the sequence
+
+                ! If this is a query node, we need to update the query string.
+                if (is_query_node(seq_path%at(rewind_idx) - 1)) then
                   if (mnemonic_cursor > 0 .and. table_cursor == mnemonic_cursor) then
                     if (link(branches(mnemonic_cursor)) == node_idx) then
                       mnemonic_cursor = mnemonic_cursor - 1
                     end if
                   end if
 
-                  call seq_path%pop()
                   table_cursor = table_cursor - 1
-                end do
-                exit
-              end if
-            end do
-          end if
-
-        else if (seq_path%length() > 1) then
-          ! Peak ahead to see if the next node is inside one of the containing sequences
-          ! then go back up the approptiate number of sequences. You may have to exit several
-          ! sequences in a row if the current sequence is the last element in the containing
-          ! sequence.
-          do path_idx = seq_path%length() - 1, 1, -1
-            if (seq_path%at(path_idx) == jmpb(node_idx + 1)) then
-              do rewind_idx = 1, seq_path%length() - path_idx
-
-                ! Exit the sequence
-                if (mnemonic_cursor > 0 .and. table_cursor == mnemonic_cursor) then
-                  if (link(branches(mnemonic_cursor)) == node_idx) then
-                    mnemonic_cursor = mnemonic_cursor - 1
-                  end if
                 end if
 
+                ! Pop out of the current sequence
                 call seq_path%pop()
-                table_cursor = table_cursor - 1
               end do
               exit
             end if
@@ -601,6 +583,19 @@ contains
     end do
 
     dims(2) = size(target_nodes)
+  end function
+
+  logical function is_query_node(node_idx)
+    integer, intent(in) :: node_idx
+
+    is_query_node = .false.
+    if (typ(node_idx) == DelayedRep .or. &
+        typ(node_idx) == FixedRep .or. &
+        typ(node_idx) == DelayedRepStacked .or. &
+        typ(node_idx) == DelayedBinary) then
+
+      is_query_node = .true.
+    end if
   end function
 
 

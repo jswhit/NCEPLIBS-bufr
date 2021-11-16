@@ -13,6 +13,7 @@ module modq_table
   character(len=3), parameter :: DelayedBinary = 'DRB'
   character(len=3), parameter :: Sequence = 'SEQ'
   character(len=3), parameter :: FixedRep = 'REP'
+  character(len=3), parameter :: Repeat = 'RPC'
   character(len=3), parameter :: Number = 'NUM'
   character(len=3), parameter :: Char = 'CHR'
 
@@ -66,17 +67,12 @@ contains
 
     integer :: lun, il, im
     integer :: node_idx, base_idx, path_idx, rewind_idx
-    integer :: table_cursor
-    type(String), allocatable :: tmp_strs(:)
-    type(String), allocatable :: current_path(:)
     type(String), target, allocatable :: query_bases(:)
     type(String), pointer :: query_bases_ptr(:)
     type(IntList) :: seq_path
     logical :: subset_found
     integer :: query_base_idx
-    integer :: readsb_result
 
-    allocate(current_path(0))
     allocate(query_strs(0))
 
     call status(file_unit, lun, il, im)
@@ -89,8 +85,6 @@ contains
         do while ( ireadsb(file_unit) == 0)
           subset_found = .true.
           node_idx = 1
-          table_cursor = 0
-
           seq_path = IntList()
           call seq_path%push(inode(lun))  ! Add root node id
           allocate(query_bases(isc(inode(lun)) -  inode(lun)))
@@ -98,50 +92,27 @@ contains
           query_base_idx = 1
 
           do node_idx = inode(lun), isc(inode(lun))
-            if (typ(node_idx) == DelayedRep .or. &
-                typ(node_idx) == FixedRep .or. &
-                typ(node_idx) == DelayedRepStacked .or. &
-                typ(node_idx) == DelayedBinary) then
+            if (typ(node_idx) == Sequence .or. typ(node_idx) == Repeat) then
               ! Enter the sequence
-
-              call seq_path%push(node_idx + 1)
-              table_cursor = table_cursor + 1
-
-              ! Increase size if necessary
-              if (size(current_path) < table_cursor) then
-                allocate(tmp_strs(size(current_path) + 1))
-                tmp_strs(1:size(current_path)) = current_path(1:size(current_path))
-                deallocate(current_path)
-                call move_alloc(tmp_strs, current_path)
-              end if
-
-              current_path(table_cursor) = String(trim(tag(node_idx + 1)))
+              call seq_path%push(node_idx)
 
             else if (typ(node_idx) == Number .or. typ(node_idx) == Char) then
               ! Found a value
-              query_bases(query_base_idx) =  make_query_base(current_path, String(tag(node_idx)))
+              query_bases(query_base_idx) =  make_query_str(seq_path, node_idx)
               query_base_idx = query_base_idx + 1
             end if
 
-            print *, tag(node_idx), tag(jmpb(node_idx + 1)), tag(link(seq_path%at(seq_path%length()) - 1))
-
             if (seq_path%length() > 1) then
-              ! Peak ahead to see if the next node is inside one of the containing sequences
-              ! then go back up the approptiate number of sequences. Sequences might end in sequences.
-
+              ! Peak ahead to see if the next node is inside one of the containing sequences.
               do path_idx = seq_path%length() - 1, 1, -1
                 ! Check if the node idx is the next node for the current path
                 ! or if the parent node of the next node is the previous path index
-                if (node_idx == link(seq_path%at(path_idx + 1) - 1) .or. &
-                    seq_path%at(path_idx) == jmpb(node_idx + 1)) then
+
+                if (seq_path%at(path_idx) == jmpb(node_idx + 1)) then
                   do rewind_idx = 1, seq_path%length() - path_idx
                     ! Exit the sequence
                     call seq_path%pop()
-
-                    current_path(table_cursor) = String("")
-                    table_cursor = table_cursor - 1
                   end do
-                  exit
                 end if
               end do
             end if
@@ -152,9 +123,7 @@ contains
           deallocate(query_strs)
           allocate(query_strs(query_base_idx - 1))
           do base_idx = 1, query_base_idx - 1
-            query_strs(base_idx) = make_query_str(String(current_subset), &
-                                                  base_idx, &
-                                                  query_bases_ptr)
+            query_strs(base_idx) = add_dup_index(base_idx, query_bases_ptr)
           end do
 
           exit  ! Capture the table for the first encounter only
@@ -168,32 +137,34 @@ contains
   end function all_queries
 
 
-  type(String) function make_query_base(path, node_str) result(q_path)
-    type(String), allocatable, intent(in) :: path(:)
-    type(String), intent(in) :: node_str
+  type(String) function make_query_str(seq_path, node_idx) result(q_str)
+    type(IntList), intent(in) :: seq_path
+    integer, intent(in) :: node_idx
 
     integer :: idx
-    integer :: repeat_cnt
-    character(len=:), allocatable :: tmp_char_str
+    character(len=:), allocatable :: q_str_chars
 
-    allocate(character(len=0) :: tmp_char_str)
+    q_str_chars = trim(tag(seq_path%at(1)))
+    do idx = 2, seq_path%length()
 
-    q_path = String("")
-    do idx = 1, size(path)
-      if (path(idx)%chars() /= "") then
-        tmp_char_str = path(idx)%chars() // "/"
-        call q_path%append(String(tmp_char_str))
+      ! Filter out sequences that are not part of the query string
+      if (typ(seq_path%at(idx) - 1) == DelayedRep .or. &
+          typ(seq_path%at(idx) - 1) == FixedRep .or. &
+          typ(seq_path%at(idx) - 1) == DelayedRepStacked .or. &
+          typ(seq_path%at(idx) - 1) == DelayedBinary) then
+
+        q_str_chars = q_str_chars // "/" // trim(tag(seq_path%at(idx)))
       end if
     end do
 
-    call q_path%append(node_str)
-  end function make_query_base
+    q_str_chars = q_str_chars // "/" // tag(node_idx)
+    q_str = String(q_str_chars)
+  end function make_query_str
 
 
-  type(String) function make_query_str(subset, q_idx, bases) result(q_str)
-    type(String), intent(in) :: subset
+  type(String) function add_dup_index(q_idx, queries) result(q_str)
     integer, intent(in) :: q_idx
-    type(String), pointer, intent(in) :: bases(:)
+    type(String), pointer, intent(in) :: queries(:)
 
     integer :: idx
     integer :: rep_cnt, tot_cnt
@@ -201,17 +172,17 @@ contains
     character(len=15) :: cnt_str
 
     tot_cnt = 0
-    do idx = 1, size(bases)
-      if (bases(q_idx) == bases(idx)) then
+    do idx = 1, size(queries)
+      if (queries(q_idx) == queries(idx)) then
         tot_cnt = tot_cnt + 1
       end if
     end do
 
-    q_str_chars = subset%chars() // "/" // bases(q_idx)%chars()
+    q_str_chars = queries(q_idx)%chars()
     if (tot_cnt > 1) then
       rep_cnt = 0
       do idx = 1, q_idx
-        if (bases(idx) == bases(q_idx)) then
+        if (queries(idx) == queries(q_idx)) then
           rep_cnt = rep_cnt + 1
         end if
       end do
@@ -221,6 +192,5 @@ contains
     end if
 
     q_str = String(q_str_chars)
-  end function make_query_str
-
+  end function add_dup_index
 end module modq_table
