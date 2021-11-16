@@ -487,7 +487,7 @@ contains
       integer :: row_length
       integer, allocatable :: export_dims(:)
 
-      row_length = product(dims(2:size(dims)))
+      row_length = max(product(dims(2:size(dims))), 1)
 
       allocate(data(total_rows*row_length))
       data = MissingValue
