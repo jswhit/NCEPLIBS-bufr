@@ -306,7 +306,8 @@ contains
       allocate(targ%dim_paths, source=dim_paths)
       allocate(targ%export_dim_idxs, source=dim_idxs)
     else
-      allocate(character(len=10)::targ%dim_paths(0))
+      allocate(character(len=10)::targ%dim_paths(1))
+      targ%dim_paths(1) = "*"
       allocate(targ%export_dim_idxs(0))
     end if
 

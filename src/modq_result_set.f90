@@ -437,6 +437,13 @@ contains
       do frame_idx = 1, self%data_frames_size
         target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
 
+        if (present(dim_paths)) then
+          if (size(dim_paths) < size(target_field%dim_paths)) then
+            deallocate(dim_paths)
+            allocate(dim_paths, source=target_field%dim_paths)
+          end if
+        end if
+
         dims_len = size(target_field%seq_counts)
         if (dims_list%length() < dims_len) then
           call dims_list%resize(dims_len)
