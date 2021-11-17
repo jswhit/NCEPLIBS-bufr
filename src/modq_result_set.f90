@@ -41,6 +41,7 @@ module modq_result_set
 
   type, public :: DataFrame
     type(DataField), allocatable :: data_fields(:)
+    integer :: field_count
 
   contains
     procedure :: add => data_frame__add
@@ -113,25 +114,20 @@ contains
 
   ! Data Frame Procedures
 
-  type(DataFrame) function initialize__data_frame() result(data_frame)
-    data_frame = DataFrame(null())  ! Needed because of gfortran bug
+  type(DataFrame) function initialize__data_frame(field_count) result(data_frame)
+    integer, intent(in) :: field_count
+
+    data_frame = DataFrame(null(), 0)  ! Needed because of gfortran bug
+    allocate(data_frame%data_fields(field_count))
   end function initialize__data_frame
-!
+
+
   subroutine data_frame__add(self, data_field)
     class(DataFrame), intent(inout) :: self
     type(DataField), intent(in) :: data_field
 
-    type(DataField), allocatable :: tmp_data_field(:)
-
-    if (.not. allocated(self%data_fields)) then
-      allocate(self%data_fields(0))
-    end if
-
-    allocate(tmp_data_field(size(self%data_fields) + 1))
-    tmp_data_field(1:size(self%data_fields)) = self%data_fields
-    tmp_data_field(size(tmp_data_field)) = data_field
-    call move_alloc(tmp_data_field, self%data_fields) 
-
+    self%field_count = self%field_count + 1
+    self%data_fields(self%field_count) = data_field
   end subroutine data_frame__add
 
 
@@ -146,7 +142,7 @@ contains
     integer :: cnt = 0
 
     field_found = .false.
-    do field_idx = 1, size(self%data_fields)
+    do field_idx = 1, self%field_count
       if (self%data_fields(field_idx)%name == name) then
         field_found = .true.
         field = self%data_fields(field_idx)

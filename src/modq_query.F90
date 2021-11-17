@@ -440,6 +440,7 @@ contains
     type(Target), pointer :: targ
     integer :: last_node_idx_in_seq
 
+    data_frame = DataFrame(size(targets))
 
     do target_idx = 1, size(targets)
       targ => targets(target_idx)
