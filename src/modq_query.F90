@@ -114,7 +114,8 @@ contains
   !> @date 2021-06-08
   !>
   !> @brief Finds the targets for all the queries in a query set 
-  !> in the query set
+  !> in the query set.  The function is memoized which means that it will
+  !> only run the query once for each subset type (caches the result).
   !>
   !> @param[in] lun - integer: Unit number for the BUFR file
   !> @param[in] current_subset - type(String): The current subset string
@@ -127,52 +128,90 @@ contains
     type(QuerySet), intent(in) :: query_set
     type(Target), allocatable :: targets(:)
 
-    integer :: q_idx, target_idx
-    character(len=:), allocatable :: name
-    type(String) :: query_str
-    type(String), allocatable :: query_strs(:)
-    type(Target), allocatable :: tmp_targets(:)
-    type(Target) :: targ
-    logical :: found_target
+    ! These variables are used to memoize this function (make it remember previous results to save time)
+    type TargetList
+      type(Target), allocatable :: targets(:)
+    end type TargetList
+    character(len=10), allocatable, save :: stored_subsets(:)
+    type(TargetList), allocatable, save :: stored_target_list(:)
 
-    allocate(targets(0))
-    do target_idx = 1,query_set%count()
-      name = query_set%get_query_name(target_idx)
-      query_strs = split_into_subqueries(query_set%get_query_str(target_idx))
+    if (.not. allocated(stored_subsets)) then
+      allocate(stored_subsets(0))
+      allocate(stored_target_list(0))
+    end if
 
-      found_target = .false.
-      do q_idx = 1, size(query_strs)
-        query_str = query_strs(q_idx)
-        targ = find_target(lun, current_subset, name, query_str%chars())
+    block  ! Find targets in stored target list
+      integer :: subset_idx
 
-        if (size(targ%node_ids) /= 0) then
-          ! Fortran runtime does not deallocate memory correctly if you do
-          ! targets = [targets, find_target(lun, name, query_str)]
-          allocate(tmp_targets(size(targets) + 1))
-          tmp_targets(1:size(targets)) = targets(1:size(targets))
-          tmp_targets(size(tmp_targets)) = targ
-          deallocate(targets)
-          call move_alloc(tmp_targets, targets)
-
-          found_target = .true.
+      do subset_idx = 1, size(stored_subsets)
+        if (stored_subsets(subset_idx) == current_subset%chars()) then
+          targets = stored_target_list(subset_idx)%targets
           exit
         end if
       end do
+    end block
 
-      if (.not. found_target) then
-        ! Add the last missing target to the list
-        allocate(tmp_targets(size(targets) + 1))
-        tmp_targets(1:size(targets)) = targets(1:size(targets))
-        tmp_targets(size(tmp_targets)) = targ
-        deallocate(targets)
-        call move_alloc(tmp_targets, targets)
+    if (.not. allocated(targets)) then
+      block  ! Find targets for new subset
+        ! These variables are used to
+        integer :: q_idx, target_idx
+        character(len=:), allocatable :: name
+        type(String) :: query_str
+        type(String), allocatable :: query_strs(:)
+        type(Target), allocatable :: tmp_targets(:)
+        type(Target) :: targ
+        logical :: found_target
+        type(TargetList), allocatable :: tmp_stored_target_list(:)
 
-        print *, "Warning: Query String "  &
-                 // query_set%get_query_str(target_idx) &
-                 // " didn't apply to subset " &
-                 // current_subset%chars()
-      end if
-    end do
+        allocate(targets(0))
+        do target_idx = 1,query_set%count()
+          name = query_set%get_query_name(target_idx)
+          query_strs = split_into_subqueries(query_set%get_query_str(target_idx))
+
+          found_target = .false.
+          do q_idx = 1, size(query_strs)
+            query_str = query_strs(q_idx)
+            targ = find_target(lun, current_subset, name, query_str%chars())
+
+            if (size(targ%node_ids) /= 0) then
+              ! Fortran runtime does not deallocate memory correctly if you do
+              ! targets = [targets, find_target(lun, name, query_str)]
+              allocate(tmp_targets(size(targets) + 1))
+              tmp_targets(1:size(targets)) = targets(1:size(targets))
+              tmp_targets(size(tmp_targets)) = targ
+              deallocate(targets)
+              call move_alloc(tmp_targets, targets)
+
+              found_target = .true.
+              exit
+            end if
+          end do
+
+          if (.not. found_target) then
+            ! Add the last missing target to the list
+            allocate(tmp_targets(size(targets) + 1))
+            tmp_targets(1:size(targets)) = targets(1:size(targets))
+            tmp_targets(size(tmp_targets)) = targ
+            deallocate(targets)
+            call move_alloc(tmp_targets, targets)
+
+            print *, "Warning: Query String "  &
+                     // query_set%get_query_str(target_idx) &
+                     // " didn't apply to subset " &
+                     // current_subset%chars()
+          end if
+        end do
+
+        allocate(tmp_stored_target_list(size(stored_target_list) + 1))
+        tmp_stored_target_list(1:size(stored_target_list)) = stored_target_list(1:size(stored_target_list))
+        tmp_stored_target_list(size(tmp_stored_target_list))%targets = targets
+        deallocate(stored_target_list)
+        call move_alloc(tmp_stored_target_list, stored_target_list)
+
+        stored_subsets = [stored_subsets, current_subset%chars()]
+
+      end block
+    end if
   end function
 
 
@@ -330,7 +369,6 @@ contains
 
     integer :: branch_idx
     integer :: dim_idx
-    integer :: mnemonic_idx
     integer :: node_idx
     type(IntList), allocatable :: dim_path_node_idxs(:)
     type(String) :: current_dim_path
