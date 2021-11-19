@@ -559,7 +559,7 @@ contains
     type(String), allocatable :: tmp_names(:)
 
     if (.not. allocated(self%data_frames)) then
-      allocate(self%data_frames(0))
+      allocate(self%data_frames(DataFrameResizeSize))
     end if
 
     do field_idx = 1, size(data_frame%data_fields)
