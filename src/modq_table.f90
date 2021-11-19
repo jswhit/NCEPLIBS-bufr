@@ -8,11 +8,12 @@ module modq_table
   implicit none
 
   character(len=3), parameter :: Subset = 'SUB'
-  character(len=3), parameter :: DelayedRep = 'DRP'
+  character(len=3), parameter :: DelayedRepetition = 'DRP'
+  character(len=3), parameter :: FixedRepetition = 'REP'
   character(len=3), parameter :: DelayedRepStacked = 'DRS'
   character(len=3), parameter :: DelayedBinary = 'DRB'
   character(len=3), parameter :: Sequence = 'SEQ'
-  character(len=3), parameter :: FixedRep = 'REP'
+  character(len=3), parameter :: StackedRepeat = 'RPS'
   character(len=3), parameter :: Repeat = 'RPC'
   character(len=3), parameter :: Number = 'NUM'
   character(len=3), parameter :: Char = 'CHR'
@@ -92,7 +93,7 @@ contains
           query_base_idx = 1
 
           do node_idx = inode(lun), isc(inode(lun))
-            if (typ(node_idx) == Sequence .or. typ(node_idx) == Repeat) then
+            if (typ(node_idx) == Sequence .or. typ(node_idx) == Repeat .or. typ(node_idx) == StackedRepeat) then
               ! Enter the sequence
               call seq_path%push(node_idx)
 
@@ -148,8 +149,8 @@ contains
     do idx = 2, seq_path%length()
 
       ! Filter out sequences that are not part of the query string
-      if (typ(seq_path%at(idx) - 1) == DelayedRep .or. &
-          typ(seq_path%at(idx) - 1) == FixedRep .or. &
+      if (typ(seq_path%at(idx) - 1) == DelayedRepetition .or. &
+          typ(seq_path%at(idx) - 1) == FixedRepetition .or. &
           typ(seq_path%at(idx) - 1) == DelayedRepStacked .or. &
           typ(seq_path%at(idx) - 1) == DelayedBinary) then
 

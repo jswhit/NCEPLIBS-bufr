@@ -73,11 +73,12 @@ module modq_query
   private
   character(len=3), parameter :: Subset = 'SUB'
   character(len=3), parameter :: DelayedRep = 'DRP'
+  character(len=3), parameter :: FixedRep = 'REP'
   character(len=3), parameter :: DelayedRepStacked = 'DRS'
   character(len=3), parameter :: DelayedBinary = 'DRB'
   character(len=3), parameter :: Sequence = 'SEQ'
-  character(len=3), parameter :: FixedRep = 'REP'
   character(len=3), parameter :: Repeat = 'RPC'
+  character(len=3), parameter :: StackedRepeat = 'RPS'
   public::query
 
 contains
@@ -270,7 +271,7 @@ contains
       table_cursor = 0
       mnemonic_cursor = 0
       do node_idx = inode(lun), isc(inode(lun))
-        if (typ(node_idx) == Sequence .or. typ(node_idx) == Repeat) then
+        if (typ(node_idx) == Sequence .or. typ(node_idx) == Repeat .or. typ(node_idx) == StackedRepeat) then
           if (is_query_node(node_idx - 1)) then
             if (tag(node_idx) == mnemonics(mnemonic_cursor + 1) .and. &
                 table_cursor == mnemonic_cursor) then
