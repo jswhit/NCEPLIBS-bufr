@@ -46,6 +46,7 @@ module modq_result_set
   contains
     procedure :: add => data_frame__add
     procedure :: field_for_node_named => data_frame__field_for_node_named
+    procedure :: field_idx_for_node_named => data_frame__field_idx_for_node_named
     final ::  data_frame__delete
   end type
 
@@ -155,6 +156,27 @@ contains
       call bort("Using unknown field named " // name%chars())
     end if
   end function data_frame__field_for_node_named
+
+
+  function data_frame__field_idx_for_node_named(self, name) result(field_idx)
+    class(DataFrame), intent(in) :: self
+    type(String), intent(in) :: name
+
+    integer :: field_idx
+    logical :: field_found
+
+    field_found = .false.
+    do field_idx = 1, self%field_count
+      if (self%data_fields(field_idx)%name == name) then
+        field_found = .true.
+        exit
+      end if
+    end do
+
+    if (.not. field_found) then
+      call bort("Using unknown field named " // name%chars())
+    end if
+  end function data_frame__field_idx_for_node_named
 
 
   subroutine data_frame__delete(self)
@@ -408,6 +430,7 @@ contains
     integer :: total_rows
     integer :: groupby_idx
     integer, allocatable :: all_dims(:)
+    integer :: target_field_idx, group_by_field_idx
 
     total_rows = 0
 
@@ -418,20 +441,30 @@ contains
       integer :: dims_len
       type(IntList) :: dims_list
 
-      integer, allocatable :: c(:)
 
       dims_list = IntList()
       groupby_idx = 1
 
-      if (present(dim_paths) .and. self%data_frames_size > 0) then
-        target_field = self%data_frames(1)%field_for_node_named(String(field_name))
-        allocate(dim_paths, source=target_field%dim_paths)
+      ! Get the indices for the fields we care about ahead of time so that we don't
+      ! waste time looking for them later. This works because the targets are always
+      ! collected in the same order for each frame.
+      if (self%data_frames_size > 0) then
+        target_field_idx = self%data_frames(1)%field_idx_for_node_named(String(field_name))
+
+        if (present(group_by) .and. group_by /= "") then
+          group_by_field_idx = self%data_frames(1)%field_idx_for_node_named(String(group_by))
+        end if
+
+        if (present(dim_paths)) then
+          target_field = self%data_frames(1)%data_fields(target_field_idx)
+          allocate(dim_paths, source=target_field%dim_paths)
+        end if
       end if
 
       !  Go through the all the frames and find the max of all dimensions and the repetition index of the
       !  groupby field.
       do frame_idx = 1, self%data_frames_size
-        target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
+        target_field = self%data_frames(frame_idx)%data_fields(target_field_idx)
 
         if (present(dim_paths)) then
           if (size(dim_paths) < size(target_field%dim_paths)) then
@@ -450,8 +483,8 @@ contains
                                       maxval(target_field%seq_counts(cnt_idx)%counts))
         end do
 
-        if (present(group_by).and. group_by /= "") then
-          group_by_field = self%data_frames(frame_idx)%field_for_node_named(String(group_by))
+        if (present(group_by) .and. group_by /= "") then
+          group_by_field = self%data_frames(frame_idx)%data_fields(group_by_field_idx)
           groupby_idx = max(groupby_idx, size(group_by_field%seq_counts))
 
           if (present(dim_paths)) then
@@ -496,7 +529,7 @@ contains
       data = MissingValue
 
       do frame_idx = 1, self%data_frames_size
-        target_field = self%data_frames(frame_idx)%field_for_node_named(String(field_name))
+        target_field = self%data_frames(frame_idx)%data_fields(target_field_idx)
         export_dims = target_field%export_dim_idxs
 
         if (.not. target_field%missing) then
