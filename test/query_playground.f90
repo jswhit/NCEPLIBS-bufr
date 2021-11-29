@@ -420,12 +420,12 @@ subroutine test_iasi
   open(lunit, file="/home/rmclaren/Data/gdas.t00z.mtiasi.tm00.bufr_d")
   call openbf(lunit, "IN", lunit)
 
-  call query_set%add("*/IASIL1CB/STCH", "startChannel")
-  call query_set%add("*/IASIL1CS/AVHRCHN/SMRA", "a1")
+!  call query_set%add("*/IASIL1CB/STCH", "startChannel")
+!  call query_set%add("*/IASIL1CS/AVHRCHN/SMRA", "a1")
+  call query_set%add("*/PRSLEVEL/T___INFO/T__EVENT/TOB", "temperature")
 
   result_set = execute(lunit, query_set, next=20)
-  call result_set%get_raw_values("startChannel", data, dims, dim_paths=dim_paths)
-  call result_set%get_raw_values("a1", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("temperature", data, dims, dim_paths=dim_paths)
 
 
   t_dims = shape(data)
@@ -462,10 +462,13 @@ subroutine test_adpupa
   open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/ADPUPA.prepbufr")
   call openbf(lunit, "IN", lunit)
 
-  call query_set%add("*/PRSLEVEL/T___INFO/TVO", "tvo")
+!  call query_set%add("*/PRSLEVEL/T___INFO/TVO", "tvo")
+  call query_set%add("*/XOB", "longitudeLaunch")
+  call query_set%add("*/PRSLEVEL/DRFTINFO/XDR", "longitude")
+  call query_set%add("*/PRSLEVEL/T___INFO/T__EVENT/TOB", "temperature")
 
   result_set = execute(lunit, query_set, next=20)
-  call result_set%get_raw_values("tvo", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("longitude", data, dims, group_by="longitude" ,dim_paths=dim_paths)
 
   do idx = 1, size(dim_paths)
     print *, dim_paths(idx)
@@ -473,6 +476,22 @@ subroutine test_adpupa
 
   t_dims = shape(data)
   print *, "Dims", dims
+
+  print *, data
+!
+!  call result_set%get_raw_values("longitude", data, dims, group_by="longitude" ,dim_paths=dim_paths)
+!
+!  t_dims = shape(data)
+!  print *, "Dims", dims
+
+!  call result_set%get_raw_values("temperature", data, dims, dim_paths=dim_paths)
+!
+!  do idx = 1, size(dim_paths)
+!    print *, dim_paths(idx)
+!  end do
+!
+!  t_dims = shape(data)
+!  print *, "Dims", dims
 
   call closbf(lunit)
   close(lunit)

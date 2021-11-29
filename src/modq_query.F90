@@ -409,6 +409,8 @@ contains
       end do
     end if
 
+    dim_paths = dim_paths(1:dim_idx)
+
     allocate(dim_idxs, source=dim_idx_list%array())
   end subroutine get_dim_info
 

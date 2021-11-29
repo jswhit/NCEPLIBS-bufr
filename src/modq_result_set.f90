@@ -396,7 +396,7 @@ contains
           num_rows = size(output)
 
           if (.not. allocated(data_rows)) allocate(data_rows(num_rows, 1))
-          data_rows(:, 1) = output
+          data_rows(:, 1) = output(1)
         else
           num_rows = product(dims(1:groupby_idx))
           row_dims = dims(groupby_idx + 1 : size(dims))
@@ -431,15 +431,20 @@ contains
     integer :: groupby_idx
     integer, allocatable :: all_dims(:)
     integer :: target_field_idx, group_by_field_idx
+    integer, allocatable :: export_dims(:)
+    integer :: total_groupby_elements
 
     total_rows = 0
+    total_groupby_elements = 0
 
     ! Find the dims based on the largest sequence counts in the fields
     block  ! Compute dims
       integer :: frame_idx
-      integer :: cnt_idx
+      integer :: cnt_idx, export_idx
       integer :: dims_len
       type(IntList) :: dims_list
+      integer, allocatable :: tmp_export_dims(:)
+      integer :: tmp_tot_groupby_elements
 
 
       dims_list = IntList()
@@ -455,10 +460,12 @@ contains
           group_by_field_idx = self%data_frames(1)%field_idx_for_node_named(String(group_by))
         end if
 
+        target_field = self%data_frames(1)%data_fields(target_field_idx)
         if (present(dim_paths)) then
-          target_field = self%data_frames(1)%data_fields(target_field_idx)
           allocate(dim_paths, source=target_field%dim_paths)
         end if
+
+        export_dims = target_field%export_dim_idxs
       end if
 
       !  Go through the all the frames and find the max of all dimensions and the repetition index of the
@@ -468,7 +475,7 @@ contains
 
         if (present(dim_paths)) then
           if (size(dim_paths) < size(target_field%dim_paths)) then
-            deallocate(dim_paths)
+            if (allocated(dim_paths)) deallocate(dim_paths)
             allocate(dim_paths, source=target_field%dim_paths)
           end if
         end if
@@ -488,7 +495,20 @@ contains
           groupby_idx = max(groupby_idx, size(group_by_field%seq_counts))
 
           if (present(dim_paths)) then
-            dim_paths = target_field%dim_paths(groupby_idx:size(target_field%dim_paths))
+            if (groupby_idx > dims_list%length()) then
+              dim_paths = group_by_field%dim_paths(size(group_by_field%dim_paths):size(group_by_field%dim_paths))
+
+              tmp_tot_groupby_elements = 1
+              do cnt_idx = 1, size(group_by_field%seq_counts)
+                tmp_tot_groupby_elements = tmp_tot_groupby_elements * maxval(group_by_field%seq_counts(cnt_idx)%counts)
+              end do
+
+              if (tmp_tot_groupby_elements > total_groupby_elements) then
+                total_groupby_elements = tmp_tot_groupby_elements
+              end if
+            else
+              dim_paths = target_field%dim_paths(size(group_by_field%export_dim_idxs):size(target_field%dim_paths))
+            end if
           end if
         end if
       end do
@@ -496,15 +516,26 @@ contains
       all_dims = dims_list%array()
       if (present(group_by) .and. group_by /= "") then
         ! The groupby field occurs at the same or greater repetition level as the target field.
-        if (groupby_idx >= dims_list%length()) then
+        if (groupby_idx > dims_list%length()) then
           allocate(dims(1))
-          dims(1) = product(all_dims)
+          dims(1) = total_groupby_elements
+          export_dims = [1]
+          all_dims = dims
 
         ! The groupby field occurs at a lower repetition level than the target field.
         else
           allocate(dims(dims_list%length() - groupby_idx + 1))
           dims(1) = product(all_dims(1:groupby_idx))
           dims(2:size(dims)) = all_dims(groupby_idx+1:size(all_dims))
+          export_dims = export_dims - groupby_idx + 1
+
+          tmp_export_dims = [1]
+          do export_idx = 1, size(export_dims)
+            if (export_dims(export_idx) > 0) then
+              tmp_export_dims = [tmp_export_dims, export_dims(export_idx)]
+            end if
+          end do
+          export_dims = tmp_export_dims
         end if
       ! There is no groupby field. So use all the dimensions.
       else
@@ -521,7 +552,6 @@ contains
       integer :: data_row_idx
       integer :: row_idx
       integer :: row_length
-      integer, allocatable :: export_dims(:)
 
       row_length = max(product(dims(2:size(dims))), 1)
 
@@ -530,7 +560,6 @@ contains
 
       do frame_idx = 1, self%data_frames_size
         target_field = self%data_frames(frame_idx)%data_fields(target_field_idx)
-        export_dims = target_field%export_dim_idxs
 
         if (.not. target_field%missing) then
           if (present(group_by) .and. group_by /= "") then
