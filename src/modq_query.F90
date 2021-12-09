@@ -42,33 +42,28 @@ module modq_query
     integer, allocatable :: export_dim_idxs(:)
   end type Target
 
+
   !> @author Ronald Mclaren
-  !> @date 2021-05-24
+  !> @date 2021-11-22
   !>
-  !> @brief Object that is used to count the number of repeats for a series of
-  !>        nested sequences. Always starts at 1 for the root "subset" sequence.
-  !>        Each new sequence is associated with a list of counts one for each
-  !>        time the sequence is encountered and numbering the number of repeats
-  !>        for that encounter. In this way it builds up a picture or tree for
-  !>        the heirarchy of sequence repetitions.
-  !>        
-  type, private :: SeqCounter
-    !> @brief The list of sequences. Starts at the root sequence and goes down from there.
-    type(IntList) :: seqs
-    !> @brief The list of counts for each sequence in the seqs list.
-    type(IntList), allocatable :: counts_list(:)
+  !> @brief Data structure that holds all the values for all possible node id's for a message. Basically a reorganized
+  !>        version of the VAL array from the legacy BUFR code.
+  !>
+  type, private :: NodeValueTable
+    integer :: start_node_id
+    type(RealList), allocatable :: value_lists(:)
+    type(IntList), allocatable :: count_lists(:)
 
     contains
-      procedure, public :: cnts_for_seq => seq_counter__cnts_for_seq
-      procedure, public :: add_cnt_for_seq => seq_counter__add_cnt_for_seq
-      procedure, public :: inc_last_cnt_for_seq => seq_counter__inc_last_cnt_for_seq
-      procedure, public :: dec_last_cnt_for_seq => seq_counter__dec_last_cnt_for_seq
-      procedure, public :: delete => seq_counter__delete
-  end type SeqCounter
+      procedure, public :: values_for_node => node_value_table__values_for_node
+      procedure, public :: counts_for_node => node_value_table__counts_for_node
+      procedure, public :: delete => node_value_table__delete
+  end type NodeValueTable
 
-  interface SeqCounter
-    module procedure :: init__seq_counter
-  end interface SeqCounter
+  interface NodeValueTable
+    module procedure :: init__node_value_table
+  end interface NodeValueTable
+
 
   private
   character(len=3), parameter :: Subset = 'SUB'
@@ -430,8 +425,8 @@ contains
     type(ResultSet), intent(inout) :: result_set
 
     real(kind=8), allocatable :: dat(:)
-    integer :: dims(2)
-    integer :: node_idx, path_idx, rep_node_idx, target_idx
+    integer :: path_idx, target_idx, idx
+    integer :: node_idx, seq_node_idx, return_node_idx
     integer :: current_sequence
     integer :: data_cursor, path_cursor
     integer :: collected_data_cursor
@@ -439,163 +434,140 @@ contains
     integer, allocatable :: rep_node_idxs(:)
     type(DataField) :: data_field
     type(DataFrame) :: data_frame
-    type(SeqCounter) :: seq_counter
     type(Target), pointer :: targ
     integer :: last_node_idx_in_seq
+    type(NodeValueTable) :: node_value_table
+    type(RealList), pointer :: real_list
+    type(IntList), pointer :: count_list, rep_list
+    integer :: real_idx
+    type(IntList), pointer :: counts
+    integer :: last_non_zero_return_idx
+
+    type(IntList) :: current_path, current_path_returns
+
+    current_path = IntList()
+    current_path_returns = IntList()
 
     data_frame = DataFrame(size(targets))
 
+    ! Reorganize the data into a NodeValueTable to make lookups faster (avoid looping over all the data a bunch of
+    ! times)
+    node_value_table = NodeValueTable(inode(lun), isc(inode(lun)))
+    do data_cursor = 1, nval(lun)
+      node_idx = inv(data_cursor, lun)
+      real_list => node_value_table%values_for_node(node_idx)
+      call real_list%push(val(data_cursor, lun))
+
+      count_list => node_value_table%counts_for_node(node_idx)
+
+      ! Unfortuantely the fixed replicated sequences do not store their counts as values for the Fixed Replication
+      ! nodes. It's therefore necessary to discover this information by manually tracing the nested sequences and
+      ! counting everything manually. Since we have to do it for fixed reps anyways, its easier just to do it for all
+      ! the squences.
+      if (current_path%length() > 0) then
+        if (typ(node_idx) == Sequence .or. &
+            typ(node_idx) == Repeat .or. &
+            typ(node_idx) == StackedRepeat) then
+
+          ! Add to the count of the currently active sequence
+          count_list%at(count_list%length()) = count_list%at(count_list%length()) + 1
+        else
+          ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
+          ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
+
+          do idx = current_path_returns%length(), 1, -1
+            if (current_path_returns%at(idx) /= 0) then
+              if (node_idx == current_path_returns%at(idx)) then
+                do path_idx = current_path_returns%length(), idx, -1
+                  call current_path_returns%pop()
+                  call current_path%pop(seq_node_idx)
+
+                  ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
+                  ! per sequence. We need to account for this here.
+                  if (typ(seq_node_idx) == DelayedRep .or. &
+                      typ(seq_node_idx) == DelayedRepStacked) then
+                    rep_list => node_value_table%counts_for_node(seq_node_idx + 1)
+                    rep_list%at(rep_list%length()) = rep_list%at(rep_list%length()) - 1
+                  end if
+                end do
+              end if
+
+              last_non_zero_return_idx = current_path_returns%length()
+              exit
+            end if
+          end do
+        end if
+      end if
+
+      if (is_query_node(node_idx)) then
+        if (typ(node_idx) == DelayedBinary .and. val(node_idx, lun) == 0) then
+          ! Ignore the node if it is a delayed binary and the value is 0
+        else
+          call current_path%push(node_idx)
+          return_node_idx = link(node_idx)
+
+          call current_path_returns%push(return_node_idx)
+
+          if (return_node_idx /= 0) then
+            last_non_zero_return_idx = current_path_returns%length()
+          end if
+        end if
+
+!        call current_path%push(node_idx)
+        count_list => node_value_table%counts_for_node(node_idx + 1)
+        call count_list%push(0)
+      end if
+    end do
+
+    ! Uncomment to print the node value table
+!    do node_idx = inode(lun), isc(inode(lun))
+!      real_list = node_value_table%values_for_node(node_idx)
+!      print *, tag(node_idx), real_list%array()
+!    end do
+
+    ! Uncomment to print he sequnce counts table
+!    do node_idx = inode(lun), isc(inode(lun))
+!      count_list => node_value_table%counts_for_node(node_idx)
+!      print *, tag(node_idx), "  size: ", count_list%length(), "  counts: ",  count_list%array()
+!    end do
+
     do target_idx = 1, size(targets)
       targ => targets(target_idx)
-      
-      if (allocated(dat)) then
-        deallocate(dat)
-      end if
-      if (allocated(rep_node_idxs)) then
-        deallocate(rep_node_idxs)
-      end if
-
-      ! Ignore targets with the wrong subset ID
-      if (size(targ%node_ids) == 0) then
-        allocate(dat(1))
-        dat(1) = MissingValue
-
-        data_field = DataField()
-        data_field%name = String(targ%name)
-        data_field%query_str = String(targ%query_str)
-        data_field%data = dat
-        data_field%missing = .true.
-        allocate(data_field%dim_paths, source=targ%dim_paths)
-        allocate(data_field%seq_counts(1))
-        data_field%seq_counts(1)%counts = [1]
-        allocate(data_field%export_dim_idxs(1))
-        data_field%export_dim_idxs(1) = 1
-
-        call data_frame%add(data_field)
-        cycle
-      end if
-
-      dims = result_shape(lun, targ%node_ids)
-
-      allocate(dat(dims(1)))
-      allocate(rep_node_idxs, source=targ%seq_path)
-
-      path_cursor = 0
-      current_sequence = 1
-      target_node = targ%node_ids(1)
-      rep_node_idxs = rep_node_idxs + 1 ! Rep node always one after the seq node
-      collected_data_cursor = 1
-
-      seq_counter = SeqCounter()
-
-      ! Add the sequence count for the root sequence in the tree (its always [1]).
-      call seq_counter%add_cnt_for_seq(1, 1)
-
-      do data_cursor = 1, nval(lun)
-        node_idx = inv(data_cursor, lun)
-
-        ! Collect the data
-        if (node_idx == target_node) then
-          dat(collected_data_cursor)  = val(data_cursor, lun)
-          collected_data_cursor = collected_data_cursor + 1
-        end if
-
-        ! The following block of code is a side effect of the haphazard and inconsistent way in which NCEPLIB-bufr
-        ! records the relationship between data nodes. Delayed repeated sequence counts are recorded as values,
-        ! but fixed repeated sequence counts are not recorded in any useful way. So we end up manually counting
-        ! everything anyways. I tried to figure out how to add this information as a VAL on the node
-        ! (its missing values for fixed reps anyways). But it turns out the global variable VAL is being changed in
-        ! multiple places (different functions in different files hammer on this thing) so I don't know what the side
-        ! effects would be. Also getting the table information would add a lot of overhead to these functions and its
-        ! tricky because indices don't neccesarily line up the way youd want.
-        !
-        ! There are other inconsistences as well. For example fixed reps "REP" have 1 corresponding SEQ element for
-        ! each repeated sequence, but delayed repeats end up having one extra one at the end for some reason. Parsing
-        ! repeated sequences that happen at the very end of the message is an extra amount of fun as you can no longer
-        ! count on the LINK (gets the node id for the next node in the tree) in this situation. The LINK table for a
-        ! sequence that happens at the end of a message is always 0. The problem is that the value 0 is kind of a catch
-        ! all value (many nodes have a link value of 0). This means counting the sequences at the end of messages needs
-        ! special logic which is not needed elsewhere.
-        !
-        ! The following code keeps track of where we are within the message tree with respect to the sequences that
-        ! we care about (the ones in the sequence path) and updated the record of sequences accordingly.
-
-        ! Update sequence count
-        if (path_cursor > 0) then
-          rep_node_idx = rep_node_idxs(path_cursor)
-
-          ! Find the node idx that corresponds to the end of the sequence we are currently in. Note that we need to do
-          ! something tricky for sequences at the end of a message.
-          if (link(targ%seq_path(path_cursor)) == 0) then
-            if (path_cursor > 1) then
-              if (inv(data_cursor + 1, lun) == rep_node_idxs(path_cursor - 1)) then
-                last_node_idx_in_seq = isc(inode(lun))
-              end if
-            else
-              last_node_idx_in_seq = -1
-            end if
-          else
-            last_node_idx_in_seq = link(targ%seq_path(path_cursor))
-          end if
-
-          if (node_idx == rep_node_idx) then
-            ! We found a SEQ element for the replication we are currently in. Increment the sequence count.
-            call seq_counter%inc_last_cnt_for_seq(rep_node_idx)
-
-          else if (node_idx == last_node_idx_in_seq) then
-            ! We found the end of the replication sequence.
-
-            ! Delayed Rep nodes have an extra SEQ nodes at the end of the sequence, so we need to get rid of that.
-            if (typ(rep_node_idx - 1) == DelayedRep .or. &
-                typ(rep_node_idx - 1) == DelayedRepStacked) then
-              call seq_counter%dec_last_cnt_for_seq(rep_node_idx)
-            end if
-
-            ! Exit the sequence, we are done with this one.
-            path_cursor = path_cursor - 1
-          else if (path_cursor == size(targ%seq_path)) then
-            continue
-          else if (node_idx == targ%seq_path(path_cursor + 1)) then
-            ! We found the next replication sequence in our path. Step into it and add a sequence count.
-            path_cursor = path_cursor + 1
-            rep_node_idx = rep_node_idxs(path_cursor)
-            call seq_counter%add_cnt_for_seq(rep_node_idx, 0)
-          end if
-        else if (size(targ%seq_path) >= path_cursor + 1) then
-          ! Step into the first repeated sequence and add the sequence count.
-          if (node_idx == targ%seq_path(path_cursor + 1)) then
-            path_cursor = path_cursor + 1
-            rep_node_idx = rep_node_idxs(path_cursor)
-            call seq_counter%add_cnt_for_seq(rep_node_idx, 0)
-          end if
-        end if
-      end do
 
       data_field = DataField()
       data_field%name = String(targ%name)
       data_field%query_str = String(targ%query_str)
       data_field%is_string = targ%is_string
-      data_field%data = dat
-      if (size(dat) == 0) data_field%missing = .true.
+      allocate(data_field%dim_paths, source=targ%dim_paths)
+      allocate(data_field%seq_path(size(targ%seq_path) + 1))
+      data_field%seq_path(1) = 1
+      data_field%seq_path(2:size(targ%seq_path)+1) = targ%seq_path
 
-      if (allocated(data_field%seq_path)) then
-        deallocate(data_field%seq_path)
+      if (size(targ%node_ids) == 0) then
+        ! Ignore targets where the required nodes could not be found in this subset
+        allocate(dat(1))
+        dat(1) = MissingValue
+        data_field%data = dat
+        data_field%missing = .true.
+        allocate(data_field%seq_counts(1))
+        data_field%seq_counts(1)%counts = [1]
+        allocate(data_field%export_dim_idxs(1))
+        data_field%export_dim_idxs(1) = 1
+      else
+        allocate(data_field%seq_counts(size(targ%seq_path) + 1))
+        data_field%seq_counts(1)%counts = [1]
+        do path_idx = 1, size(targ%seq_path)
+          count_list => node_value_table%counts_for_node(targ%seq_path(path_idx) + 1)
+          allocate(data_field%seq_counts(path_idx + 1)%counts, source=count_list%array())
+        end do
+
+        real_list => node_value_table%values_for_node(targ%node_ids(1))
+        allocate(data_field%data, source=real_list%array())
+        allocate(data_field%export_dim_idxs, source=targ%export_dim_idxs)
+
+        if (size(data_field%data) == 0) data_field%missing = .true.
       end if
 
-      allocate(data_field%seq_path, source=seq_counter%seqs%array())
-
-      if (allocated(data_field%seq_counts)) deallocate(data_field%seq_counts)
-      allocate(data_field%seq_counts(size(data_field%seq_path)))
-      do path_idx = 1, size(data_field%seq_path)
-        allocate(data_field%seq_counts(path_idx)%counts, &
-                 source=seq_counter%counts_list(path_idx)%array())
-      end do
-
-      if (allocated(data_field%dim_paths)) deallocate(data_field%dim_paths)
-      allocate(data_field%dim_paths, source=targ%dim_paths)
-      allocate(data_field%export_dim_idxs, source=targ%export_dim_idxs)
-
-      call seq_counter%delete()
       call data_frame%add(data_field)
     end do
 
@@ -642,177 +614,82 @@ contains
   end function
 
 
-  ! SeqCounter methods
+  !> NodeValueTable functions
 
   !> @author Ronald Mclaren
-  !> @date 2021-05-24
+  !> @date 2021-11-22
   !>
-  !> @brief Initializes a new SeqCounter object.
+  !> @brief Creates a new NodeValueTable instance.
   !>
-  !> @return seq_counter - type(SeqCounter): The initialized SeqCounter object
-  !>
-  type(SeqCounter) function init__seq_counter() result(seq_counter)
-    seq_counter = SeqCounter(IntList(), null())
-    allocate(seq_counter%counts_list(0))
-  end function init__seq_counter
 
+  function init__node_value_table(start_node_idx, end_node_idx) result(node_value_table)
+    integer, intent(in) :: start_node_idx
+    integer, intent(in) :: end_node_idx
+    type(NodeValueTable):: node_value_table
 
-  !> @author Ronald Mclaren
-  !> @date 2021-05-24
-  !>
-  !> @brief Gets the counts for a given sequence.
-  !>
-  !> @param[in] self - class(SeqCounter): The SeqCounter instance
-  !> @param[in] seq - integer: The sequence index
-  !> @return counts - type(IntList): The counts for the given sequence
-  !>
-  type(IntList) function seq_counter__cnts_for_seq(self, seq) result(counts)
-    class(SeqCounter), intent(in) :: self
-    integer, intent(in) :: seq
-    integer :: idx
-    logical :: found
-
-    found = .false.
-    do idx = 1, self%seqs%length()
-      if (seq == self%seqs%at(idx)) then
-        counts = self%counts_list(idx)
-        found = .true.
-        exit
-      end if
-    end do
-
-    if (.not. found) then
-      call bort("Getting counts for unkown sequence.")
-    end if
-
-  end function seq_counter__cnts_for_seq
-
-
-  !> @author Ronald Mclaren
-  !> @date 2021-05-24
-  !>
-  !> @brief Adds a count of repeats for a given sequence.
-  !>
-  !> @param[in] self - class(SeqCounter): The SeqCounter instance
-  !> @param[in] seq - integer: The sequence index
-  !> @param[in] count - integer: The count (number of repeats) to add
-  !>
-  subroutine seq_counter__add_cnt_for_seq(self, seq, cnt)
-    class(SeqCounter), intent(inout) :: self
-    integer, intent(in) :: seq
-    integer, intent(in) :: cnt
-
-    logical :: found
-    integer :: idx
-    type(IntList), allocatable :: tmp_counts_list(:)
-
-    found = .false.
-    do idx = 1, self%seqs%length()
-      if (seq == self%seqs%at(idx)) then
-        found = .true.
-        call self%counts_list(idx)%push(cnt)
-      end if
-    end do
-
-    if (.not. found) then
-      call self%seqs%push(seq)
-
-      ! Fortran runtime has problems with custom types in
-      ! self%counts_list = [self%counts_list, IntList((/cnt/))]
-      allocate(tmp_counts_list(size(self%counts_list) + 1))
-      tmp_counts_list(1:size(self%counts_list)) = self%counts_list(1:size(self%counts_list))
-      tmp_counts_list(size(tmp_counts_list)) = IntList((/cnt/))
-      deallocate(self%counts_list)
-      call move_alloc(tmp_counts_list, self%counts_list)
-    end if
-
-  end subroutine seq_counter__add_cnt_for_seq
-
-
-  !> @author Ronald Mclaren
-  !> @date 2021-05-24
-  !>
-  !> @brief Increments the last count for a given sequence by 1.
-  !>
-  !> @param[in] self - class(SeqCounter): The SeqCounter instance
-  !> @param[in] seq - integer: The sequence index
-  !>
-  subroutine seq_counter__inc_last_cnt_for_seq(self, seq)
-    class(SeqCounter), intent(inout) :: self
-    integer, intent(in) :: seq
-    logical :: found
     integer :: idx
 
-    found = .false.
-    do idx = 1, self%seqs%length()
-      if (seq == self%seqs%at(idx)) then
-        found = .true.
+    node_value_table = NodeValueTable(start_node_idx, null(), null())
+    allocate(node_value_table%value_lists(end_node_idx - start_node_idx + 1))
+    allocate(node_value_table%count_lists(end_node_idx - start_node_idx + 1))
 
-        self%counts_list(idx)%at(self%counts_list(idx)%length()) = &
-          self%counts_list(idx)%at(self%counts_list(idx)%length()) + 1
-        exit
-      end if
+    do idx = 1, end_node_idx - start_node_idx + 1
+      node_value_table%value_lists(idx) = RealList()
+      node_value_table%count_lists(idx) = IntList()
     end do
-
-    if (.not. found) then
-      call bort("SeqCounter: Trying to increment unknown sequence.")
-    end if
-
-  end subroutine seq_counter__inc_last_cnt_for_seq
+  end function init__node_value_table
 
 
   !> @author Ronald Mclaren
-  !> @date 2021-05-24
+  !> @date 2021-11-22
   !>
-  !> @brief Decrements the last count for a given sequence.
+  !> @brief Get values for node with id.
   !>
-  !> @param[in] self - class(SeqCounter): The SeqCounter instance
-  !> @param[in] seq - integer: The sequence index
+  !> @param[in] self - class(NodeValueTable): The NodeValueTable instance
+  !> @param[in] id - integer: The node id
   !>
-  subroutine seq_counter__dec_last_cnt_for_seq(self, seq)
-    class(SeqCounter), intent(inout) :: self
-    integer, intent(in) :: seq
-    logical :: found
-    integer :: idx
+  !> @returns type(RealList):: The NodeValueTable instance
+  !>
+  function node_value_table__values_for_node(self, id) result(values)
+    class(NodeValueTable), target, intent(inout) :: self
+    integer, intent(in) :: id
+    type(RealList), pointer:: values
 
-    found = .false.
-    do idx = 1, self%seqs%length()
-      if (seq == self%seqs%at(idx)) then
-        found = .true.
-        self%counts_list(idx)%at(self%counts_list(idx)%length()) = &
-          self%counts_list(idx)%at(self%counts_list(idx)%length()) - 1
-        exit
-      end if
-    end do
-
-    if (.not. found) then
-      call bort("SeqCounter: Trying to increment unknown sequence.")
-    end if
-  end subroutine seq_counter__dec_last_cnt_for_seq
+    values => self%value_lists(id - self%start_node_id + 1)
+  end function node_value_table__values_for_node
 
 
   !> @author Ronald Mclaren
-  !> @date 2021-06-01
+  !> @date 2021-11-22
   !>
-  !> @brief Deletes the sequence counter from memory.
+  !> @brief Get values for node with id.
   !>
-  !> @param[in] self - class(SeqCounter): The SeqCounter instance
+  !> @param[in] self - class(NodeValueTable): The NodeValueTable instance
+  !> @param[in] id - integer: The node id
   !>
-  subroutine seq_counter__delete(self)
-    class(SeqCounter), intent(inout) :: self
+  !> @returns type(IntList):: The counts
+  !>
+  function node_value_table__counts_for_node(self, id) result(counts)
+    class(NodeValueTable), target, intent(inout) :: self
+    integer, intent(in) :: id
+    type(IntList), pointer:: counts
 
-! GNU does not finalize this object properly
-#ifdef GNU
-    block
-      integer :: idx
+    counts => self%count_lists(id - self%start_node_id + 1)
+  end function node_value_table__counts_for_node
 
-      do idx = 1, size(self%counts_list)
-        call self%counts_list(idx)%delete()
-      end do
 
-      deallocate(self%counts_list)
-    end block
-#endif
+  !> @author Ronald Mclaren
+  !> @date 2021-11-22
+  !>
+  !> @brief Delete the NodeValueTable instance.
+  !>
+  !> @param[in] self - class(NodeValueTable): The NodeValueTable instance
+  !>
+  subroutine node_value_table__delete(self)
+    class(NodeValueTable), intent(inout) :: self
 
-  end subroutine seq_counter__delete
+    if (allocated(self%value_lists)) deallocate(self%value_lists)
+    if (allocated(self%count_lists)) deallocate(self%count_lists)
+  end subroutine node_value_table__delete
+
 end module modq_query

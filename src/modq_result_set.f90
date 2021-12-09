@@ -91,9 +91,6 @@ contains
   type(DataField) function initialize__data_field() result(data_field)
     ! Needed because of gfortran bug
     data_field = DataField(String(""), String(""), .false., .false., null(), null(), null(), null())
-
-    allocate(data_field%data(0))
-    allocate(data_field%seq_path(0))
   end function initialize__data_field
 
   subroutine data_field__delete(self)
