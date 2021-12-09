@@ -426,7 +426,7 @@ contains
 
     real(kind=8), allocatable :: dat(:)
     integer :: path_idx, target_idx, idx
-    integer :: node_idx, seq_node_idx, return_node_idx
+    integer :: node_idx, seq_node_idx, return_node_idx, tmp_return_node_idx
     integer :: current_sequence
     integer :: data_cursor, path_cursor
     integer :: collected_data_cursor
@@ -443,7 +443,19 @@ contains
     type(IntList), pointer :: counts
     integer :: last_non_zero_return_idx
 
+    logical, allocatable :: value_node_mask(:)
+    logical, allocatable :: seq_node_mask(:)
+
     type(IntList) :: current_path, current_path_returns
+
+
+    ! Initialize the Masks
+    allocate(value_node_mask(isc(inode(lun))))
+    allocate(seq_node_mask(isc(inode(lun))))
+    value_node_mask = .false.
+    do target_idx = 1, size(targets)
+      value_node_mask(targets(target_idx)%node_ids(1)) = .true.
+    end do
 
     current_path = IntList()
     current_path_returns = IntList()
@@ -456,7 +468,10 @@ contains
     do data_cursor = 1, nval(lun)
       node_idx = inv(data_cursor, lun)
       real_list => node_value_table%values_for_node(node_idx)
-      call real_list%push(val(data_cursor, lun))
+
+      if (value_node_mask(node_idx)) then
+        call real_list%push(val(data_cursor, lun))
+      end if
 
       count_list => node_value_table%counts_for_node(node_idx)
 
@@ -471,31 +486,25 @@ contains
 
           ! Add to the count of the currently active sequence
           count_list%at(count_list%length()) = count_list%at(count_list%length()) + 1
-        else
+        else if (node_idx == return_node_idx .or. data_cursor == nval(lun)) then
           ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
           ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
 
-          do idx = current_path_returns%length(), 1, -1
-            if (current_path_returns%at(idx) /= 0) then
-              if (node_idx == current_path_returns%at(idx)) then
-                do path_idx = current_path_returns%length(), idx, -1
-                  call current_path_returns%pop()
-                  call current_path%pop(seq_node_idx)
+          do path_idx = current_path_returns%length(), last_non_zero_return_idx, -1
+            call current_path_returns%pop()
+            call current_path%pop(seq_node_idx)
 
-                  ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
-                  ! per sequence. We need to account for this here.
-                  if (typ(seq_node_idx) == DelayedRep .or. &
-                      typ(seq_node_idx) == DelayedRepStacked) then
-                    rep_list => node_value_table%counts_for_node(seq_node_idx + 1)
-                    rep_list%at(rep_list%length()) = rep_list%at(rep_list%length()) - 1
-                  end if
-                end do
-              end if
-
-              last_non_zero_return_idx = current_path_returns%length()
-              exit
+            ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
+            ! per sequence. We need to account for this here.
+            if (typ(seq_node_idx) == DelayedRep .or. &
+                typ(seq_node_idx) == DelayedRepStacked) then
+              rep_list => node_value_table%counts_for_node(seq_node_idx + 1)
+              rep_list%at(rep_list%length()) = rep_list%at(rep_list%length()) - 1
             end if
           end do
+
+          last_non_zero_return_idx = current_path_returns%length()
+          return_node_idx = current_path_returns%at(last_non_zero_return_idx)
         end if
       end if
 
@@ -504,12 +513,13 @@ contains
           ! Ignore the node if it is a delayed binary and the value is 0
         else
           call current_path%push(node_idx)
-          return_node_idx = link(node_idx)
+          tmp_return_node_idx = link(node_idx)
 
-          call current_path_returns%push(return_node_idx)
+          call current_path_returns%push(tmp_return_node_idx)
 
-          if (return_node_idx /= 0) then
+          if (tmp_return_node_idx /= 0) then
             last_non_zero_return_idx = current_path_returns%length()
+            return_node_idx = tmp_return_node_idx
           end if
         end if
 

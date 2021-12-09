@@ -164,39 +164,83 @@ subroutine test__query_radiance
   open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gdas.t18z.1bmhs.tm00.bufr_d")
   call openbf(lunit, "IN", lunit)
 
-!  call query_set%add("*/CLAT", "latitude")
-!  call query_set%add("*/CLON", "longitude")
+
+!  year: "*/YEAR"
+!  month: "*/MNTH"
+!  day: "*/DAYS"
+!  hour: "*/HOUR"
+!  minute: "*/MINU"
+!  second: "*/SECO"
+!  height:
+!  query: "*/HMSL"
+!  hols:
+!  query: "*/HOLS"
+!  fovn:
+!  query: "*/FOVN"
+!  lsql:
+!  query: "*/LSQL"
+!  longitude:
+!  query: "*/CLON"
+!  transforms:
+!  - offset: 50
+!  latitude:
+!  query: "*/CLAT"
+!  sza:
+!  query: "*/SOZA"
+!  saz:
+!  query: "*/SOLAZI"
+!  vza:
+!  query: "*/SAZA"
+!  vaz:
+!  query: "*/BEARAZ"
+!  radiance:
+!  query: "[*/BRITCSTC/TMBR, */BRIT/TMBR]"
+
+  call query_set%add("*/YEAR", "year")
+  call query_set%add("*/MNTH", "month")
+  call query_set%add("*/DAYS", "days")
+  call query_set%add("*/HOUR", "hour")
+  call query_set%add("*/MINU", "minute")
+  call query_set%add("*/SECO", "second")
+  call query_set%add("*/HMSL", "height")
+  call query_set%add("*/HOLS", "hols")
+  call query_set%add("*/FOVN", "fovn")
+  call query_set%add("*/LSQL", "lsql")
+  call query_set%add("*/CLON", "longitude")
+  call query_set%add("*/CLAT", "latitude")
+  call query_set%add("*/SOZA", "sza")
+  call query_set%add("*/SOLAZI", "saz")
+  call query_set%add("*/SAZA", "vza")
+  call query_set%add("*/BEARAZ", "vaz")
   call query_set%add("[*/BRITCSTC/TMBR, */BRIT/TMBR]", "radiance")
-!  call query_set%add("[*/BRITCSTC/CHNM, */BRIT/CHNM]", "channel")
 
 !  print *, "Num Messages", count_msgs(lunit)
-  result_set = execute(lunit, query_set, next=1)
+  result_set = execute(lunit, query_set)
 
   ! print *, "Longitude", result_set%get("longitude", group_by="radiance")
   ! print *, "Radiance", result_set%get("radiance", group_by="longitude")
 
-   call result_set%get_raw_values("radiance", data, dims, dim_paths=dim_paths)
-!  data = result_set%get_2d("radiance", group_by="longitude")
+  call result_set%get_raw_values("year", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("month", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("days", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("hour", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("minute", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("second", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("height", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("hols", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("fovn", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("lsql", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("longitude", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("latitude", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("sza", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("saz", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("vza", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("vaz", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("radiance", data, dims, dim_paths=dim_paths)
 
   t_dims = shape(data)
   
   print *, "Dims", t_dims, dims
-  do idx = 1, size(data)
-    print *, data(idx)
-  end do
-
-  ! print *, "Radiance", data
-  ! print *, "Dims", dims
-
-  ! allocate(dat_out(dims(1), dims(2)))
-  ! t_dims = dims
-  ! dat_out = reshape(data, t_dims)
-
-  ! do idx = 1, dims(1)
-  !   print *, dat_out(idx, :)
-  ! end do
-
-  ! print *, reshape(data, ((/464, 5/)))
 
   call closbf(lunit)
   close(lunit)
@@ -467,8 +511,24 @@ subroutine test_adpupa
   call query_set%add("*/PRSLEVEL/DRFTINFO/XDR", "longitude")
   call query_set%add("*/PRSLEVEL/T___INFO/T__EVENT/TOB", "temperature")
 
-  result_set = execute(lunit, query_set, next=20)
+  result_set = execute(lunit, query_set)
+  call result_set%get_raw_values("longitudeLaunch", data, dims, group_by="longitude" ,dim_paths=dim_paths)
+
+  do idx = 1, size(dim_paths)
+ !   print *, dim_paths(idx)
+  end do
+
+  t_dims = shape(data)
+  print *, "Dims", dims
+
+  print *, data
+
   call result_set%get_raw_values("longitude", data, dims, group_by="longitude" ,dim_paths=dim_paths)
+
+  t_dims = shape(data)
+  print *, "Dims", dims
+
+  call result_set%get_raw_values("temperature", data, dims, dim_paths=dim_paths)
 
   do idx = 1, size(dim_paths)
     print *, dim_paths(idx)
@@ -476,22 +536,6 @@ subroutine test_adpupa
 
   t_dims = shape(data)
   print *, "Dims", dims
-
-  print *, data
-!
-!  call result_set%get_raw_values("longitude", data, dims, group_by="longitude" ,dim_paths=dim_paths)
-!
-!  t_dims = shape(data)
-!  print *, "Dims", dims
-
-!  call result_set%get_raw_values("temperature", data, dims, dim_paths=dim_paths)
-!
-!  do idx = 1, size(dim_paths)
-!    print *, dim_paths(idx)
-!  end do
-!
-!  t_dims = shape(data)
-!  print *, "Dims", dims
 
   call closbf(lunit)
   close(lunit)
@@ -510,12 +554,12 @@ program test_query
 !  call test__query_ia5
 !  call test_int_list
 !  call test_query_parser
-!  call test__query_radiance
+  call test__query_radiance
 !call test__query_gnssro
 !  call test_adpsfc
   ! call test_table
 !  call test_iasi
-  call test_adpupa
+!  call test_adpupa
 end program test_query
 
 

@@ -189,7 +189,7 @@ contains
   type(ResultSet) function initialize__result_set() result(result_set)
     result_set = ResultSet(null(), null(), 0, null())   ! Needed because of gfortran bug
 
-    allocate(result_set%data_frames(0))
+    allocate(result_set%data_frames(DataFrameResizeSize))
     allocate(result_set%names(0))
     allocate(result_set%field_widths(0))
   end function initialize__result_set
@@ -617,9 +617,6 @@ contains
     type(DataFrame), allocatable :: tmp_data_frames(:)
     type(String), allocatable :: tmp_names(:)
 
-    if (.not. allocated(self%data_frames)) then
-      allocate(self%data_frames(DataFrameResizeSize))
-    end if
 
     do field_idx = 1, size(data_frame%data_fields)
       field = data_frame%data_fields(field_idx)

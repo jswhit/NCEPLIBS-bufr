@@ -141,8 +141,6 @@ contains
   subroutine string__delete(self)
     type(String), intent(inout) :: self
 
-    if (allocated(self%char_buffer)) then
-      deallocate(self%char_buffer)
-    end if
+    if (allocated(self%char_buffer)) deallocate(self%char_buffer)
   end subroutine
 end module modq_string
