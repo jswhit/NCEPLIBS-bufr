@@ -45,8 +45,8 @@ module modq_list
     procedure, public :: length => real_list__length
     procedure, public :: resize => real_list__resize
     procedure, public :: delete => real_list__delete
-!    procedure, public :: print => real_list__print
-!    final :: real_list__final
+    procedure, public :: print => real_list__print
+    final :: real_list__final
   end type RealList
 
   interface RealList
@@ -326,7 +326,7 @@ module modq_list
 
 
     subroutine real_list__final(self)
-      class(RealList), intent(inout) :: self
+      type(RealList), intent(inout) :: self
 
       if (associated(self%values)) then
         deallocate(self%values)

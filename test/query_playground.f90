@@ -215,7 +215,7 @@ subroutine test__query_radiance
   call query_set%add("[*/BRITCSTC/TMBR, */BRIT/TMBR]", "radiance")
 
 !  print *, "Num Messages", count_msgs(lunit)
-  result_set = execute(lunit, query_set)
+  result_set = execute(lunit, query_set, 1)
 
   ! print *, "Longitude", result_set%get("longitude", group_by="radiance")
   ! print *, "Radiance", result_set%get("radiance", group_by="longitude")

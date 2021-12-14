@@ -454,7 +454,9 @@ contains
     allocate(seq_node_mask(isc(inode(lun))))
     value_node_mask = .false.
     do target_idx = 1, size(targets)
-      value_node_mask(targets(target_idx)%node_ids(1)) = .true.
+      if (size(targets(target_idx)%node_ids) > 0) then
+        value_node_mask(targets(target_idx)%node_ids(1)) = .true.
+      end if
     end do
 
     current_path = IntList()
@@ -469,6 +471,8 @@ contains
       node_idx = inv(data_cursor, lun)
       real_list => node_value_table%values_for_node(node_idx)
 
+!      print *, tag(node_idx), " ", typ(node_idx)
+
       if (value_node_mask(node_idx)) then
         call real_list%push(val(data_cursor, lun))
       end if
@@ -480,19 +484,24 @@ contains
       ! counting everything manually. Since we have to do it for fixed reps anyways, its easier just to do it for all
       ! the squences.
       if (current_path%length() > 0) then
-        if (typ(node_idx) == Sequence .or. &
+        if ((typ(node_idx) == Sequence .and. &
+                (typ(jmpb(node_idx)) == DelayedBinary .or. typ(jmpb(node_idx)) == FixedRep)) .or. &
             typ(node_idx) == Repeat .or. &
             typ(node_idx) == StackedRepeat) then
 
           ! Add to the count of the currently active sequence
           count_list%at(count_list%length()) = count_list%at(count_list%length()) + 1
-        else if (node_idx == return_node_idx .or. data_cursor == nval(lun)) then
+        end if
+
+        if (node_idx == return_node_idx .or. data_cursor == nval(lun)) then
           ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
           ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
 
           do path_idx = current_path_returns%length(), last_non_zero_return_idx, -1
             call current_path_returns%pop()
             call current_path%pop(seq_node_idx)
+
+!            print *, "<<<< ", tag(seq_node_idx)
 
             ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
             ! per sequence. We need to account for this here.
@@ -509,17 +518,31 @@ contains
       end if
 
       if (is_query_node(node_idx)) then
-        if (typ(node_idx) == DelayedBinary .and. val(node_idx, lun) == 0) then
+        if (typ(node_idx) == DelayedBinary .and. val(data_cursor, lun) == 0) then
           ! Ignore the node if it is a delayed binary and the value is 0
         else
           call current_path%push(node_idx)
           tmp_return_node_idx = link(node_idx)
+
+!          print *, ">>>> ", tag(node_idx)
 
           call current_path_returns%push(tmp_return_node_idx)
 
           if (tmp_return_node_idx /= 0) then
             last_non_zero_return_idx = current_path_returns%length()
             return_node_idx = tmp_return_node_idx
+          else
+            last_non_zero_return_idx = 1
+            return_node_idx = 0
+
+            if (data_cursor /= nval(lun)) then
+              do path_idx = current_path%length(), 1, -1
+                return_node_idx = link(jmpb(current_path%at(path_idx)))
+                last_non_zero_return_idx = current_path_returns%length() - path_idx + 1
+
+                if (return_node_idx /= 0) exit
+              end do
+            end if
           end if
         end if
 
@@ -582,6 +605,7 @@ contains
     end do
 
     call result_set%add(data_frame)
+    call node_value_table%delete()
   end subroutine
 
 
