@@ -77,9 +77,7 @@ module query_interface
     type(ResultSet), pointer :: result_set_fptr
 
     allocate(result_set_fptr)
-    allocate(result_set_fptr%names(0))
-    allocate(result_set_fptr%data_frames(0))
-    allocate(result_set_fptr%field_widths(0))
+    allocate(result_set_fptr%data_frames(DataFrameResizeSize))
 
     result_set_cptr = c_loc(result_set_fptr)
   end subroutine result_set__allocate

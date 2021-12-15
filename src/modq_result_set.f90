@@ -6,7 +6,7 @@ module modq_result_set
   private
 
   real(kind=8), public, parameter :: MissingValue = 10e10_8
-  integer, parameter :: DataFrameResizeSize = 50000
+  integer, public, parameter :: DataFrameResizeSize = 50000
 
   type, public :: SeqCounts
     integer, allocatable :: counts(:)
@@ -190,8 +190,6 @@ contains
     result_set = ResultSet(null(), null(), 0, null())   ! Needed because of gfortran bug
 
     allocate(result_set%data_frames(DataFrameResizeSize))
-    allocate(result_set%names(0))
-    allocate(result_set%field_widths(0))
   end function initialize__result_set
 
 
@@ -611,33 +609,23 @@ contains
     class(ResultSet), intent(inout) :: self
     type(DataFrame), intent(in) :: data_frame
 
-    integer :: field_idx, name_idx
-    logical :: name_found
+    integer :: field_idx
     type(DataField) :: field
     type(DataFrame), allocatable :: tmp_data_frames(:)
-    type(String), allocatable :: tmp_names(:)
 
+    if (.not. allocated(self%names)) then
+      allocate(self%names(size(data_frame%data_fields)))
+      allocate(self%field_widths(size(data_frame%data_fields)))
+      self%field_widths = 0
+      do field_idx = 1, size(data_frame%data_fields)
+        field = data_frame%data_fields(field_idx)
+        self%names(field_idx) = field%name
+      end do
+    end if
 
     do field_idx = 1, size(data_frame%data_fields)
       field = data_frame%data_fields(field_idx)
-
-      name_found = .false.
-      do name_idx = 1, size(self%names)
-        if (field%name == self%names(name_idx)) then
-          self%field_widths(name_idx) = max(size(field%data), self%field_widths(name_idx))
-          name_found = .true.
-          exit
-        end if
-      end do
-
-      if (.not. name_found) then
-        allocate(tmp_names(size(self%names) + 1))
-        tmp_names(1:size(self%names)) = self%names
-        tmp_names(size(tmp_names)) = field%name
-        call move_alloc(tmp_names, self%names)
-
-        self%field_widths = [self%field_widths, size(field%data)]
-      end if
+      self%field_widths(field_idx) = max(size(field%data), self%field_widths(field_idx))
     end do
 
     if (self%data_frames_size >= size(self%data_frames)) then

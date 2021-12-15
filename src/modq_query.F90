@@ -499,10 +499,6 @@ contains
       ! counting everything manually. Since we have to do it for fixed reps anyways, its easier just to do it for all
       ! the squences.
 
-      if  (size(masks%path_node_mask) < jmpb(node_idx)) then
-        print *, size(masks%path_node_mask), jmpb(node_idx)
-      end if
-
       if (jmpb(node_idx) > 0) then
         if (masks%path_node_mask(jmpb(node_idx))) then
           if ((typ(node_idx) == Sequence .and. &

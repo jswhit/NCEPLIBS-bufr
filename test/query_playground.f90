@@ -215,7 +215,7 @@ subroutine test__query_radiance
   call query_set%add("[*/BRITCSTC/TMBR, */BRIT/TMBR]", "radiance")
 
 !  print *, "Num Messages", count_msgs(lunit)
-  result_set = execute(lunit, query_set, 1)
+  result_set = execute(lunit, query_set)
 
   ! print *, "Longitude", result_set%get("longitude", group_by="radiance")
   ! print *, "Radiance", result_set%get("radiance", group_by="longitude")
@@ -240,7 +240,8 @@ subroutine test__query_radiance
 
   t_dims = shape(data)
   
-  print *, "Dims", t_dims, dims
+  print *, "Dims", t_dims
+  print *, "Data", data
 
   call closbf(lunit)
   close(lunit)
