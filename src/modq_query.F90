@@ -43,6 +43,12 @@ module modq_query
   end type Target
 
 
+  type, private :: ProcessingMasks
+    logical, allocatable :: value_node_mask(:)
+    logical, allocatable :: path_node_mask(:)
+  end type ProcessingMasks
+
+
   !> @author Ronald Mclaren
   !> @date 2021-11-22
   !>
@@ -97,11 +103,12 @@ contains
 
     integer :: lun, il, im
     type(Target), allocatable :: targets(:)
+    type(ProcessingMasks) :: masks
 
     call status(lunit, lun, il, im)
 
-    targets = find_targets(lun, current_subset, query_set)
-    call collect_data(lun, targets, result_set)
+    call find_targets(lun, current_subset, query_set, targets, masks)
+    call collect_data(lun, targets, masks, result_set)
 
   end subroutine query
 
@@ -118,11 +125,12 @@ contains
   !> @param[in] query_set - type(QuerySet): The query set
   !> @return targets - type(Target)(:): The list of targets
   !>
-  function find_targets(lun, current_subset, query_set) result(targets)
+  subroutine find_targets(lun, current_subset, query_set, targets, masks)
     integer, intent(in) :: lun
     type(String), intent(in) :: current_subset
     type(QuerySet), intent(in) :: query_set
-    type(Target), allocatable :: targets(:)
+    type(Target), allocatable, intent(out) :: targets(:)
+    type(ProcessingMasks), intent(out) :: masks
 
     ! These variables are used to memoize this function (make it remember previous results to save time)
     type TargetList
@@ -130,10 +138,12 @@ contains
     end type TargetList
     character(len=10), allocatable, save :: stored_subsets(:)
     type(TargetList), allocatable, save :: stored_target_list(:)
+    type(ProcessingMasks), allocatable, save :: stored_masks(:)
 
     if (.not. allocated(stored_subsets)) then
       allocate(stored_subsets(0))
       allocate(stored_target_list(0))
+      allocate(stored_masks(0))
     end if
 
     block  ! Find targets in stored target list
@@ -142,6 +152,7 @@ contains
       do subset_idx = 1, size(stored_subsets)
         if (stored_subsets(subset_idx) == current_subset%chars()) then
           targets = stored_target_list(subset_idx)%targets
+          masks = stored_masks(subset_idx)
           exit
         end if
       end do
@@ -150,7 +161,7 @@ contains
     if (.not. allocated(targets)) then
       block  ! Find targets for new subset
         ! These variables are used to
-        integer :: q_idx, target_idx
+        integer :: q_idx, target_idx, path_idx
         character(len=:), allocatable :: name
         type(String) :: query_str
         type(String), allocatable :: query_strs(:)
@@ -158,8 +169,13 @@ contains
         type(Target) :: targ
         logical :: found_target
         type(TargetList), allocatable :: tmp_stored_target_list(:)
+        type(ProcessingMasks), allocatable :: tmp_stored_masks(:)
 
         allocate(targets(0))
+        allocate(masks%value_node_mask(isc(inode(lun))))
+        allocate(masks%path_node_mask(isc(inode(lun))))
+        masks%value_node_mask = .false.
+        masks%path_node_mask = .false.
         do target_idx = 1,query_set%count()
           name = query_set%get_query_name(target_idx)
           query_strs = split_into_subqueries(query_set%get_query_str(target_idx))
@@ -170,6 +186,12 @@ contains
             targ = find_target(lun, current_subset, name, query_str%chars())
 
             if (size(targ%node_ids) /= 0) then
+              ! Collect mask data
+              masks%value_node_mask(targ%node_ids(1)) = .true.
+              do path_idx = 1, size(targ%seq_path)
+                masks%path_node_mask(targ%seq_path(path_idx)) = .true.
+              end do
+
               ! Fortran runtime does not deallocate memory correctly if you do
               ! targets = [targets, find_target(lun, name, query_str)]
               allocate(tmp_targets(size(targets) + 1))
@@ -204,11 +226,17 @@ contains
         deallocate(stored_target_list)
         call move_alloc(tmp_stored_target_list, stored_target_list)
 
+        allocate(tmp_stored_masks(size(stored_masks) + 1))
+        tmp_stored_masks(1:size(stored_masks)) = stored_masks(1:size(stored_masks))
+        tmp_stored_masks(size(tmp_stored_masks)) = masks
+        deallocate(stored_masks)
+        call move_alloc(tmp_stored_masks, stored_masks)
+
         stored_subsets = [stored_subsets, current_subset%chars()]
 
       end block
     end if
-  end function
+  end subroutine
 
 
   !> @author Ronald Mclaren
@@ -419,9 +447,10 @@ contains
   !> @param[in] targets - type(Target)(:): Array of targets
   !> @param[in] result_set - type(ResultSet): The result set
   !>
-  subroutine collect_data(lun, targets, result_set)
+  subroutine collect_data(lun, targets, masks, result_set)
     integer, intent(in) :: lun
     type(Target), target, intent(in) :: targets(:)
+    type(ProcessingMasks), intent(in) :: masks
     type(ResultSet), intent(inout) :: result_set
 
     real(kind=8), allocatable :: dat(:)
@@ -443,26 +472,14 @@ contains
     type(IntList), pointer :: counts
     integer :: last_non_zero_return_idx
 
-    logical, allocatable :: value_node_mask(:)
-    logical, allocatable :: seq_node_mask(:)
-
     type(IntList) :: current_path, current_path_returns
 
-
-    ! Initialize the Masks
-    allocate(value_node_mask(isc(inode(lun))))
-    allocate(seq_node_mask(isc(inode(lun))))
-    value_node_mask = .false.
-    do target_idx = 1, size(targets)
-      if (size(targets(target_idx)%node_ids) > 0) then
-        value_node_mask(targets(target_idx)%node_ids(1)) = .true.
-      end if
-    end do
 
     current_path = IntList()
     current_path_returns = IntList()
 
     data_frame = DataFrame(size(targets))
+    return_node_idx = -1
 
     ! Reorganize the data into a NodeValueTable to make lookups faster (avoid looping over all the data a bunch of
     ! times)
@@ -471,9 +488,7 @@ contains
       node_idx = inv(data_cursor, lun)
       real_list => node_value_table%values_for_node(node_idx)
 
-!      print *, tag(node_idx), " ", typ(node_idx)
-
-      if (value_node_mask(node_idx)) then
+      if (masks%value_node_mask(node_idx)) then
         call real_list%push(val(data_cursor, lun))
       end if
 
@@ -483,48 +498,51 @@ contains
       ! nodes. It's therefore necessary to discover this information by manually tracing the nested sequences and
       ! counting everything manually. Since we have to do it for fixed reps anyways, its easier just to do it for all
       ! the squences.
-      if (current_path%length() > 0) then
-        if ((typ(node_idx) == Sequence .and. &
-                (typ(jmpb(node_idx)) == DelayedBinary .or. typ(jmpb(node_idx)) == FixedRep)) .or. &
-            typ(node_idx) == Repeat .or. &
-            typ(node_idx) == StackedRepeat) then
 
-          ! Add to the count of the currently active sequence
-          count_list%at(count_list%length()) = count_list%at(count_list%length()) + 1
-        end if
+      if  (size(masks%path_node_mask) < jmpb(node_idx)) then
+        print *, size(masks%path_node_mask), jmpb(node_idx)
+      end if
 
-        if (node_idx == return_node_idx .or. data_cursor == nval(lun)) then
-          ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
-          ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
+      if (jmpb(node_idx) > 0) then
+        if (masks%path_node_mask(jmpb(node_idx))) then
+          if ((typ(node_idx) == Sequence .and. &
+                  (typ(jmpb(node_idx)) == DelayedBinary .or. typ(jmpb(node_idx)) == FixedRep)) .or. &
+              typ(node_idx) == Repeat .or. &
+              typ(node_idx) == StackedRepeat) then
 
-          do path_idx = current_path_returns%length(), last_non_zero_return_idx, -1
-            call current_path_returns%pop()
-            call current_path%pop(seq_node_idx)
+            ! Add to the count of the currently active sequence
+            count_list%at(count_list%length()) = count_list%at(count_list%length()) + 1
+          end if
 
-!            print *, "<<<< ", tag(seq_node_idx)
+          if (node_idx == return_node_idx .or. data_cursor == nval(lun)) then
+            ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
+            ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
 
-            ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
-            ! per sequence. We need to account for this here.
-            if (typ(seq_node_idx) == DelayedRep .or. &
-                typ(seq_node_idx) == DelayedRepStacked) then
-              rep_list => node_value_table%counts_for_node(seq_node_idx + 1)
-              rep_list%at(rep_list%length()) = rep_list%at(rep_list%length()) - 1
-            end if
-          end do
+            do path_idx = current_path_returns%length(), last_non_zero_return_idx, -1
+              call current_path_returns%pop()
+              call current_path%pop(seq_node_idx)
 
-          last_non_zero_return_idx = current_path_returns%length()
-          return_node_idx = current_path_returns%at(last_non_zero_return_idx)
+              ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
+              ! per sequence. We need to account for this here.
+              if (typ(seq_node_idx) == DelayedRep .or. &
+                  typ(seq_node_idx) == DelayedRepStacked) then
+                rep_list => node_value_table%counts_for_node(seq_node_idx + 1)
+                rep_list%at(rep_list%length()) = rep_list%at(rep_list%length()) - 1
+              end if
+            end do
+
+            last_non_zero_return_idx = current_path_returns%length()
+            return_node_idx = current_path_returns%at(last_non_zero_return_idx)
+          end if
         end if
       end if
 
-      if (is_query_node(node_idx)) then
+      if (masks%path_node_mask(node_idx) .and. is_query_node(node_idx)) then
         if (typ(node_idx) == DelayedBinary .and. val(data_cursor, lun) == 0) then
           ! Ignore the node if it is a delayed binary and the value is 0
         else
           call current_path%push(node_idx)
           tmp_return_node_idx = link(node_idx)
-
-!          print *, ">>>> ", tag(node_idx)
 
           call current_path_returns%push(tmp_return_node_idx)
 
@@ -722,8 +740,23 @@ contains
   subroutine node_value_table__delete(self)
     class(NodeValueTable), intent(inout) :: self
 
-    if (allocated(self%value_lists)) deallocate(self%value_lists)
-    if (allocated(self%count_lists)) deallocate(self%count_lists)
+    integer :: idx
+
+    if (allocated(self%value_lists)) then
+      do idx = 1, size(self%value_lists)
+        call self%value_lists(idx)%delete()
+      end do
+
+      deallocate(self%value_lists)
+    end if
+
+    if (allocated(self%count_lists)) then
+      do idx = 1, size(self%count_lists)
+        call self%count_lists(idx)%delete()
+      end do
+
+      deallocate(self%count_lists)
+    end if
   end subroutine node_value_table__delete
 
 end module modq_query
