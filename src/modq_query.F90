@@ -371,7 +371,8 @@ contains
     else
       allocate(character(len=10)::targ%dim_paths(1))
       targ%dim_paths(1) = "*"
-      allocate(targ%export_dim_idxs(0))
+      allocate(targ%export_dim_idxs(1))
+      targ%export_dim_idxs(1) = 1
     end if
 
     deallocate(mnemonics)

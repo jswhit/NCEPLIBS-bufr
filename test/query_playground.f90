@@ -374,6 +374,42 @@ subroutine test_table
   close(lunit)
 end subroutine test_table
 
+subroutine test_satwnd
+  use modq_execute
+  use modq_query_set
+  use modq_result_set
+  use modq_test
+  implicit none
+
+  integer, parameter :: lunit = 12
+
+  type(QuerySet) :: query_set
+  type(ResultSet) :: result_set
+  real(kind=8), allocatable :: data(:)
+  integer, allocatable :: dims(:)
+
+  real(kind=8), allocatable :: dat_out(:,:)
+  integer :: idx
+  integer :: t_dims(1)
+  character(len=:), allocatable :: dim_paths(:)
+
+  open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/bufr_satwnd_new_format.bufr")
+  call openbf(lunit, "IN", lunit)
+
+  call query_set%add("*/AMVIII/SWQM", "qm")
+
+  result_set = execute(lunit, query_set)
+
+  call result_set%get_raw_values("qm", data, dims, dim_paths=dim_paths)
+  t_dims = shape(data)
+
+  print *, "Dims", dims
+  !  print *, "Data", data
+
+  call closbf(lunit)
+  close(lunit)
+end subroutine test_satwnd
+
 subroutine test_synoptic_query
   use modq_execute
   use modq_query_set
@@ -594,7 +630,8 @@ program test_query
   ! call test_table
 !  call test_iasi
 !  call test_adpupa
-  call test_synoptic_query
+!  call test_synoptic_query
+  call test_satwnd
 end program test_query
 
 
