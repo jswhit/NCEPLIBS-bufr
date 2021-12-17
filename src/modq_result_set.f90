@@ -472,6 +472,7 @@ contains
           if (size(dim_paths) < size(target_field%dim_paths)) then
             if (allocated(dim_paths)) deallocate(dim_paths)
             allocate(dim_paths, source=target_field%dim_paths)
+            export_dims = target_field%export_dim_idxs
           end if
         end if
 
@@ -509,6 +510,7 @@ contains
       end do
 
       all_dims = dims_list%array()
+
       if (present(group_by) .and. group_by /= "") then
         ! The groupby field occurs at the same or greater repetition level as the target field.
         if (groupby_idx > dims_list%length()) then

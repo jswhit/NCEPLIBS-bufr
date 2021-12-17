@@ -374,6 +374,42 @@ subroutine test_table
   close(lunit)
 end subroutine test_table
 
+subroutine test_synoptic_query
+  use modq_execute
+  use modq_query_set
+  use modq_result_set
+  use modq_test
+  implicit none
+
+  integer, parameter :: lunit = 12
+
+  type(QuerySet) :: query_set
+  type(ResultSet) :: result_set
+  real(kind=8), allocatable :: data(:)
+  integer, allocatable :: dims(:)
+
+  real(kind=8), allocatable :: dat_out(:,:)
+  integer :: idx
+  integer :: t_dims(1)
+  character(len=:), allocatable :: dim_paths(:)
+
+  open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gdas.t06z.adpsfc.tm00.bufr_d")
+  call openbf(lunit, "IN", lunit)
+
+  call query_set%add("*/RCPTIM/RCHR", "timeOfRecieptHour")
+
+  result_set = execute(lunit, query_set)
+
+  call result_set%get_raw_values("timeOfRecieptHour", data, dims, dim_paths=dim_paths)
+  t_dims = shape(data)
+
+  print *, "Dims", dims
+!  print *, "Data", data
+
+  call closbf(lunit)
+  close(lunit)
+end subroutine test_synoptic_query
+
 
 subroutine test_adpsfc
   use modq_execute
@@ -460,17 +496,14 @@ subroutine test_iasi
   character(len=:), allocatable :: dim_paths(:)
 
 
-  !  open(lunit,
-  !  file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gnssro_kompsat5_20180415_00Z.bufr")
   open(lunit, file="/home/rmclaren/Data/gdas.t00z.mtiasi.tm00.bufr_d")
   call openbf(lunit, "IN", lunit)
 
 !  call query_set%add("*/IASIL1CB/STCH", "startChannel")
-!  call query_set%add("*/IASIL1CS/AVHRCHN/SMRA", "a1")
-  call query_set%add("*/PRSLEVEL/T___INFO/T__EVENT/TOB", "temperature")
+  call query_set%add("*/IASIL1CS/AVHRCHN/SMRA", "a1")
 
   result_set = execute(lunit, query_set, next=20)
-  call result_set%get_raw_values("temperature", data, dims, dim_paths=dim_paths)
+  call result_set%get_raw_values("a1", data, dims, dim_paths=dim_paths)
 
 
   t_dims = shape(data)
@@ -555,12 +588,13 @@ program test_query
 !  call test__query_ia5
 !  call test_int_list
 !  call test_query_parser
-  call test__query_radiance
+!  call test__query_radiance
 !call test__query_gnssro
 !  call test_adpsfc
   ! call test_table
 !  call test_iasi
 !  call test_adpupa
+  call test_synoptic_query
 end program test_query
 
 

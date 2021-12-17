@@ -509,27 +509,31 @@ contains
             ! Add to the count of the currently active sequence
             count_list%at(count_list%length()) = count_list%at(count_list%length()) + 1
           end if
+        end if
+      end if
 
-          if (node_idx == return_node_idx .or. data_cursor == nval(lun)) then
-            ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
-            ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
+      if (current_path%length() > 1) then
+        if (node_idx == return_node_idx .or. &
+            data_cursor == nval(lun) .or. &
+            node_idx == current_path%at(current_path%length() - 1) + 1) then
+          ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
+          ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
 
-            do path_idx = current_path_returns%length(), last_non_zero_return_idx, -1
-              call current_path_returns%pop()
-              call current_path%pop(seq_node_idx)
+          do path_idx = current_path_returns%length(), last_non_zero_return_idx, -1
+            call current_path_returns%pop()
+            call current_path%pop(seq_node_idx)
 
-              ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
-              ! per sequence. We need to account for this here.
-              if (typ(seq_node_idx) == DelayedRep .or. &
-                  typ(seq_node_idx) == DelayedRepStacked) then
-                rep_list => node_value_table%counts_for_node(seq_node_idx + 1)
-                rep_list%at(rep_list%length()) = rep_list%at(rep_list%length()) - 1
-              end if
-            end do
+            ! Delayed and Stacked Reps are inconsistent with other sequence types and add an extra replication
+            ! per sequence. We need to account for this here.
+            if (typ(seq_node_idx) == DelayedRep .or. &
+                typ(seq_node_idx) == DelayedRepStacked) then
+              rep_list => node_value_table%counts_for_node(seq_node_idx + 1)
+              rep_list%at(rep_list%length()) = rep_list%at(rep_list%length()) - 1
+            end if
+          end do
 
-            last_non_zero_return_idx = current_path_returns%length()
-            return_node_idx = current_path_returns%at(last_non_zero_return_idx)
-          end if
+          last_non_zero_return_idx = current_path_returns%length()
+          return_node_idx = current_path_returns%at(last_non_zero_return_idx)
         end if
       end if
 
@@ -560,7 +564,6 @@ contains
           end if
         end if
 
-!        call current_path%push(node_idx)
         count_list => node_value_table%counts_for_node(node_idx + 1)
         call count_list%push(0)
       end if
@@ -589,17 +592,15 @@ contains
       allocate(data_field%seq_path(size(targ%seq_path) + 1))
       data_field%seq_path(1) = 1
       data_field%seq_path(2:size(targ%seq_path)+1) = targ%seq_path
+      allocate(data_field%export_dim_idxs, source=targ%export_dim_idxs)
 
       if (size(targ%node_ids) == 0) then
         ! Ignore targets where the required nodes could not be found in this subset
-        allocate(dat(1))
-        dat(1) = MissingValue
-        data_field%data = dat
+        allocate(data_field%data(1))
+        data_field%data(1) = MissingValue
         data_field%missing = .true.
         allocate(data_field%seq_counts(1))
         data_field%seq_counts(1)%counts = [1]
-        allocate(data_field%export_dim_idxs(1))
-        data_field%export_dim_idxs(1) = 1
       else
         allocate(data_field%seq_counts(size(targ%seq_path) + 1))
         data_field%seq_counts(1)%counts = [1]
@@ -610,7 +611,6 @@ contains
 
         real_list => node_value_table%values_for_node(targ%node_ids(1))
         allocate(data_field%data, source=real_list%array())
-        allocate(data_field%export_dim_idxs, source=targ%export_dim_idxs)
 
         if (size(data_field%data) == 0) data_field%missing = .true.
       end if
