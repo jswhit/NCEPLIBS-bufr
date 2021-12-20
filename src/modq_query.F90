@@ -513,10 +513,10 @@ contains
         end if
       end if
 
-      if (current_path%length() > 1) then
+      if (current_path%length() >= 1) then
         if (node_idx == return_node_idx .or. &
             data_cursor == nval(lun) .or. &
-            node_idx == current_path%at(current_path%length() - 1) + 1) then
+            (current_path%length() > 1 .and. node_idx == current_path%at(current_path%length() - 1) + 1)) then
           ! Look for the first path return idx that is not 0 and check if its this node idx. Exit the sequence if its
           ! appropriate. A return idx of 0 indicates a sequence that occurs as the last element of another sequence.
 
@@ -576,10 +576,15 @@ contains
 !      print *, tag(node_idx), real_list%array()
 !    end do
 
+
     ! Uncomment to print he sequnce counts table
 !    do node_idx = inode(lun), isc(inode(lun))
-!      count_list => node_value_table%counts_for_node(node_idx)
-!      print *, tag(node_idx), "  size: ", count_list%length(), "  counts: ",  count_list%array()
+!      if (jmpb(node_idx) > 0) then
+!        if (masks%path_node_mask(jmpb(node_idx))) then
+!          count_list => node_value_table%counts_for_node(node_idx)
+!          print *, " ",  tag(node_idx), "  size: ", count_list%length(), "  counts: ",  count_list%array()
+!        end if
+!      end if
 !    end do
 
     do target_idx = 1, size(targets)

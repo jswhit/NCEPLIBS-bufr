@@ -333,7 +333,7 @@ contains
     block  ! compute max counts
       integer :: dim_idx
 
-      do dim_idx = 1, size(dims)
+      do dim_idx = 1, size(target_field%seq_counts)
         ! Update max_counts by size of counts array
         if (max_counts < size(target_field%seq_counts(dim_idx)%counts)) then
           max_counts = size(target_field%seq_counts(dim_idx)%counts)

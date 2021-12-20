@@ -461,56 +461,117 @@ subroutine test_adpsfc
   real(kind=8), allocatable :: dat(:,:)
   real(kind=8), allocatable :: old_interface_data(:)
 
-  open(lunit, file="/home/rmclaren/Data/ADPSFC_split.prepbufr")
+  open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gdas.t06z.adpsfc.tm00.bufr_d")
   call openbf(lunit, "IN", lunit)
 
-!  ! Get data using old interface
-!  block  ! Old Interface
-!    integer :: ireadmg, ireadsb
-!    character(8) :: subset
-!    integer(kind=8) :: my_idate
-!    integer :: lun, il, im
-!    integer :: iret
-!    integer :: data_size
-!    integer :: data_idx
-!    real(kind=8) :: msg_data
+  ! Get data using old interface
+  block  ! Old Interface
+    integer :: ireadmg, ireadsb
+    character(8) :: subset
+    integer(kind=8) :: my_idate
+    integer :: lun, il, im
+    integer :: iret
+    integer :: data_size
+    integer :: data_idx
+    real(kind=8) :: msg_cnt
+    real(kind=8) :: msg_data(2)
+
+    call status(lunit, lun, il, im)
+
+    allocate(old_interface_data(100000))
+
+    old_interface_data = 0
+    ! Get the data
+    data_idx = 0
+    do while (ireadmg(lunit, lun, subset, my_idate) == 0)
+      do while (ireadsb(lunit) == 0)
+
+        msg_data = MissingValue
+
+        data_idx = data_idx + 1
+        call ufbint(lunit, msg_cnt, 1, 1, iret, "{RCPTIM}")
+
+        if (msg_cnt == MissingValue) then
+          call ufbint(lunit, msg_data, 1, 1, iret, "RCMI")
+!          print *, data_idx, msg_data
+        else
+          old_interface_data(data_idx) = msg_cnt
+          call ufbint(lunit, msg_data, 1, int(msg_cnt), iret, "RCMI")
+        end if
+
+        print *, int(data_idx), msg_data
+
+
+!        if (subset == "NC000007") then
+!          data_idx = data_idx + 1
+!          call ufbint(lunit, msg_data, 1, 1, iret, "RCMI")
+!          print *, msg_data
+!          old_interface_data(data_idx) = msg_data
+!        end if
+      end do
+    end do
+  end block  ! Old Interface
+
+  print *, maxval(old_interface_data)
+
+!  !  call query_set%add("*/XOB", "longitude")
+!  call query_set%add("*/YOB", "latitude")
+!  call query_set%add("*/T___INFO/T__EVENT/TOB", "temperature")
 !
-!    call status(lunit, lun, il, im)
+!  result_set = execute(lunit, query_set, next=5)
 !
-!    allocate(old_interface_data(1000))
+!!  print *, "", shape(result_set%get("temperature", group_by="latitude"))
+!!  print *, "Longitude: ", shape(result_set%get("longitude"))
 !
-!    ! Get the data
-!    data_idx = 0
-!    do while (ireadmg(lunit, lun, subset, my_idate) == 0)
-!      do while (ireadsb(lunit) == 0)
-!        data_idx = data_idx + 1
-!        call ufbint(lunit, msg_data, 1, 1, iret, "YOB")
-!        old_interface_data(data_idx) = msg_data
-!      end do
-!    end do
-!  end block  ! Old Interface
-!
-!  print *, old_interface_data
-
-
-
-  !  call query_set%add("*/XOB", "longitude")
-  call query_set%add("*/YOB", "latitude")
-  call query_set%add("*/T___INFO/T__EVENT/TOB", "temperature")
-
-  result_set = execute(lunit, query_set, next=5)
-
-!  print *, "", shape(result_set%get("temperature", group_by="latitude"))
-!  print *, "Longitude: ", shape(result_set%get("longitude"))
-
-  print *, result_set%get_1d("latitude")
-  dat = result_set%get_2d("temperature") + 273.15
-!  print *, dat(2,:,1)
-  print *, shape(dat)
+!  print *, result_set%get_1d("latitude")
+!  dat = result_set%get_2d("temperature") + 273.15
+!!  print *, dat(2,:,1)
+!  print *, shape(dat)
 
   call closbf(lunit)
   close(lunit)
 end subroutine test_adpsfc
+
+
+subroutine test_adpsfc_2
+  use modq_execute
+  use modq_query_set
+  use modq_result_set
+  use modq_test
+  implicit none
+
+  integer, parameter :: lunit = 12
+
+  type(QuerySet) :: query_set
+  type(ResultSet) :: result_set
+
+  integer, allocatable :: dims(:)
+  real(kind=8), allocatable :: data(:)
+  character(len=:), allocatable :: dim_paths(:)
+
+
+  open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/gdas.t06z.adpsfc.tm00.bufr_d")
+  call openbf(lunit, "IN", lunit)
+
+
+    !  call query_set%add("*/XOB", "longitude")
+    call query_set%add("[*/RCMI, */RCPTIM/RCMI]", "minutes")
+
+    result_set = execute(lunit, query_set)
+
+    call result_set%get_raw_values("minutes", data, dims, dim_paths=dim_paths)
+  !
+  !!  print *, "", shape(result_set%get("temperature", group_by="latitude"))
+  !!  print *, "Longitude: ", shape(result_set%get("longitude"))
+  !
+  !  print *, result_set%get_1d("latitude")
+  !  dat = result_set%get_2d("temperature") + 273.15
+  !!  print *, dat(2,:,1)
+  !  print *, shape(dat)
+
+  call closbf(lunit)
+  close(lunit)
+end subroutine test_adpsfc_2
 
 subroutine test_iasi
   use modq_execute
@@ -626,12 +687,12 @@ program test_query
 !  call test_query_parser
 !  call test__query_radiance
 !call test__query_gnssro
-!  call test_adpsfc
+  call test_adpsfc_2
   ! call test_table
 !  call test_iasi
 !  call test_adpupa
 !  call test_synoptic_query
-  call test_satwnd
+!  call test_satwnd
 end program test_query
 
 
