@@ -18,8 +18,11 @@ program print_subsets
   implicit none
 
   integer, parameter :: FileUnit = 12
+  integer, parameter :: FileUnitTable1 = 13
+  integer, parameter :: FileUnitTable2 = 14
 
   character(len=255) :: input_file
+  character(len=255) :: table_path
   character(len=255) :: arg
   type(String), allocatable :: subsets(:)
   integer :: idx
@@ -32,6 +35,9 @@ program print_subsets
     if (arg == "-h") then
       call print_help
       return
+    else if (arg == "-t") then
+      call getarg(idx+1, table_path)
+      idx = idx + 2
     else
       call getarg(idx, input_file)
       idx = idx + 1
@@ -44,7 +50,13 @@ program print_subsets
   end if
 
   open(FileUnit, file=input_file)
-  call openbf(FileUnit, "IN", FileUnit)
+
+  if (table_path == "") then
+    call openbf(FileUnit, "IN", FileUnit)
+  else
+    call openbf(FileUnit, "SEC3", FileUnit)
+    call mtinfo(trim(table_path), FileUnitTable1, FileUnitTable2)
+  end if
 
   subsets = all_subsets(FileUnit)
 

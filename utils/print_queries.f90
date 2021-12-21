@@ -26,20 +26,28 @@ contains
     end do
   end subroutine print_paths
 
-  subroutine print_queries(input_file, subset)
+  subroutine print_queries(input_file, subset, table_path)
     character(len=*), intent(in) :: input_file
     character(len=*), intent(in) :: subset
+    character(len=*), intent(in) :: table_path
 
     integer, parameter :: FileUnit = 12
+    integer, parameter :: FileUnitTable1 = 13
+    integer, parameter :: FileUnitTable2 = 14
 
     type(String), allocatable :: q_paths(:)
     type(String), allocatable :: subsets(:)
     integer :: subset_idx
     logical :: file_opened = .false.
 
-
     open(FileUnit, file=trim(input_file))
-    call openbf(FileUnit, "IN", FileUnit)
+
+    if (table_path == "") then
+      call openbf(FileUnit, "IN", FileUnit)
+    else
+      call openbf(FileUnit, "SEC3", FileUnit)
+      call mtinfo(trim(table_path), FileUnitTable1, FileUnitTable2)
+    end if
 
     if (trim(subset) /= "") then
       q_paths = all_queries(FileUnit, String(subset))
@@ -64,8 +72,15 @@ contains
         ! Reset the file
         call closbf(FileUnit)
         close(FileUnit)
+
         open(FileUnit, file=trim(input_file))
-        call openbf(FileUnit, "IN", FileUnit)
+
+        if (table_path == "") then
+          call openbf(FileUnit, "IN", FileUnit)
+        else
+          call openbf(FileUnit, "SEC3", FileUnit)
+          call mtinfo(trim(table_path), FileUnitTable1, FileUnitTable2)
+        end if
 
         q_paths = all_queries(FileUnit, subsets(subset_idx))
 
@@ -87,11 +102,13 @@ program main
   implicit none
 
   character(len=255) :: input_file
+  character(len=255) :: table_path
   character(len=255) :: subset
   character(len=255) :: arg
   integer :: idx
 
   input_file = ""
+  table_path = ""
   subset = ""
 
   idx = 1
@@ -103,19 +120,23 @@ program main
     else if (trim(arg) == "-h") then
       call print_help
       return
+    else if (trim(arg) == "-t") then
+      call getarg(idx + 1, table_path)
+      idx = idx + 2
     else
       input_file = arg
       exit
     end if
   end do
 
-  print *, trim(input_file)
-  print *, trim(subset)
+!  print *, trim(input_file)
+!  print *, trim(subset)
+!  print *, trim(table_path)
 
   if (trim(input_file) == "") then
     call print_help
     call bort("Error: no input file specified")
   end if
 
-  call print_queries(trim(input_file), trim(subset))
+  call print_queries(trim(input_file), trim(subset), trim(table_path))
 end program main
