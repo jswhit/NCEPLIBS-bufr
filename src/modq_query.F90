@@ -454,32 +454,24 @@ contains
     type(ProcessingMasks), intent(in) :: masks
     type(ResultSet), intent(inout) :: result_set
 
-    real(kind=8), allocatable :: dat(:)
-    integer :: path_idx, target_idx, idx
-    integer :: node_idx, seq_node_idx, return_node_idx, tmp_return_node_idx
-    integer :: current_sequence
-    integer :: data_cursor, path_cursor
-    integer :: collected_data_cursor
-    integer :: target_node
-    integer, allocatable :: rep_node_idxs(:)
-    type(DataField) :: data_field
-    type(DataFrame) :: data_frame
+    integer :: path_idx, target_idx
+    integer :: node_idx, seq_node_idx, tmp_return_node_idx
+    integer :: data_cursor
+    integer :: return_node_idx
+    type(DataField), pointer :: data_field
+    type(DataFrame), pointer :: data_frame
     type(Target), pointer :: targ
-    integer :: last_node_idx_in_seq
     type(NodeValueTable) :: node_value_table
     type(RealList), pointer :: real_list
     type(IntList), pointer :: count_list, rep_list
-    integer :: real_idx
-    type(IntList), pointer :: counts
     integer :: last_non_zero_return_idx
-
     type(IntList) :: current_path, current_path_returns
 
 
     current_path = IntList()
     current_path_returns = IntList()
 
-    data_frame = DataFrame(size(targets))
+    data_frame => result_set%next_data_frame()
     return_node_idx = -1
 
     ! Reorganize the data into a NodeValueTable to make lookups faster (avoid looping over all the data a bunch of
@@ -590,7 +582,7 @@ contains
     do target_idx = 1, size(targets)
       targ => targets(target_idx)
 
-      data_field = DataField()
+      data_field => data_frame%data_fields(target_idx)
       data_field%name = String(targ%name)
       data_field%query_str = String(targ%query_str)
       data_field%is_string = targ%is_string
@@ -620,39 +612,11 @@ contains
 
         if (size(data_field%data) == 0) data_field%missing = .true.
       end if
-
-      call data_frame%add(data_field)
     end do
 
-    call result_set%add(data_frame)
     call node_value_table%delete()
   end subroutine
 
-
-  !> @author Ronald Mclaren
-  !> @date 2021-05-11
-  !>
-  !> @brief Computes the shape of the resulting data given target node ids.
-  !>
-  !> @param[in] lun - integer: Unit number for the BUFR file
-  !> @param[in] target_nodes - integer(:): Array of target node ids
-  !>
-  function result_shape(lun, target_nodes) result(dims)
-    integer, intent(in) :: lun
-    integer, intent(in) :: target_nodes(:)
-    integer :: dims(2)
-
-    integer :: data_cursor
-
-    dims = 0
-    do data_cursor = 1, nval(lun)
-      if (inv(data_cursor, lun) == target_nodes(1)) then
-        dims(1) = dims(1) + 1
-      end if
-    end do
-
-    dims(2) = size(target_nodes)
-  end function
 
   logical function is_query_node(node_idx)
     integer, intent(in) :: node_idx

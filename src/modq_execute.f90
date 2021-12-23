@@ -35,6 +35,9 @@ module modq_execute
       integer(kind=8) :: my_idate
       integer :: msg_num
 
+      allocate(result_set%names, source=query_set%names)
+      allocate(result_set%field_widths(size(query_set%names)))
+
       msg_num = 0
       do while (ireadmg(file_unit, subset, my_idate) == 0)
         msg_num = msg_num + 1

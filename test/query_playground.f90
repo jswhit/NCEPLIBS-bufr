@@ -573,6 +573,95 @@ subroutine test_adpsfc_2
   close(lunit)
 end subroutine test_adpsfc_2
 
+
+subroutine test_new_satwind_2
+  use modq_execute
+  use modq_query_set
+  use modq_result_set
+  use modq_test
+  implicit none
+
+  integer, parameter :: lunit = 12
+
+  type(QuerySet) :: query_set
+  type(ResultSet) :: result_set
+
+  integer, allocatable :: dims(:)
+  real(kind=8), allocatable :: data(:)
+  character(len=:), allocatable :: dim_paths(:)
+  real(kind=8), allocatable :: old_interface_data(:)
+
+
+  open(lunit, file="/home/rmclaren/Work/ioda-bundle/iodaconv/test/testinput/bufr_read_2_dim_blocks.bufr")
+  call openbf(lunit, "IN", lunit)
+
+  ! Get data using old interface
+  block  ! Old Interface
+    integer :: ireadmg, ireadsb
+    character(8) :: subset
+    integer(kind=8) :: my_idate
+    integer :: lun, il, im
+    integer :: iret
+    integer :: data_size
+    integer :: data_idx
+    real(kind=8) :: msg_cnt = 12
+    real(kind=8) :: msg_data(12)
+
+    call status(lunit, lun, il, im)
+
+    allocate(old_interface_data(100000))
+
+    old_interface_data = 0
+    ! Get the data
+    data_idx = 0
+    do while (ireadmg(lunit, lun, subset, my_idate) == 0)
+      do while (ireadsb(lunit) == 0)
+
+        msg_data = MissingValue
+
+        data_idx = data_idx + 1
+
+
+        if (msg_cnt == MissingValue) then
+          call ufbint(lunit, msg_data, 1, 1, iret, "GNAP")
+          !          print *, data_idx, msg_data
+        else
+          old_interface_data(data_idx) = msg_cnt
+          call ufbrep(lunit, msg_data, 1, 12, iret, "GNAP")
+        end if
+
+        print *, int(data_idx), msg_data
+
+
+        !        if (subset == "NC000007") then
+        !          data_idx = data_idx + 1
+        !          call ufbint(lunit, msg_data, 1, 1, iret, "RCMI")
+        !          print *, msg_data
+        !          old_interface_data(data_idx) = msg_data
+        !        end if
+      end do
+    end do
+  end block  ! Old Interface
+
+  print *, maxval(old_interface_data)
+
+
+
+  !  !  call query_set%add("*/XOB", "longitude")
+!  call query_set%add("*/AMVIII/PRLC", "pressure")
+!
+!  result_set = execute(lunit, query_set)
+!
+!  call result_set%get_raw_values("pressure", data, dims, dim_paths=dim_paths)
+!
+!  print *, dims
+
+  call closbf(lunit)
+  close(lunit)
+end subroutine test_new_satwind_2
+
+
+
 subroutine test_iasi
   use modq_execute
   use modq_query_set
@@ -687,12 +776,13 @@ program test_query
 !  call test_query_parser
 !  call test__query_radiance
 !call test__query_gnssro
-  call test_adpsfc_2
+!  call test_adpsfc_2
   ! call test_table
 !  call test_iasi
-!  call test_adpupa
+  call test_adpupa
 !  call test_synoptic_query
 !  call test_satwnd
+!  call test_new_satwind_2
 end program test_query
 
 

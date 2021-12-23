@@ -44,7 +44,6 @@ module modq_result_set
     integer :: field_count
 
   contains
-    procedure :: add => data_frame__add
     procedure :: field_for_node_named => data_frame__field_for_node_named
     procedure :: field_idx_for_node_named => data_frame__field_idx_for_node_named
     final ::  data_frame__delete
@@ -70,7 +69,8 @@ module modq_result_set
       procedure, public :: get_chars => result_set__get_chars
       procedure, public :: get_raw_values => result_set__get_raw_values
       procedure, public :: is_string => result_set__is_string
-      procedure, public :: add => result_set__add
+      procedure, public :: next_data_frame => result_set__next_data_frame
+      procedure, public :: set_field_widths => result_set__set_field_widths
       procedure :: get_rows_for_field => result_set__get_rows_for_field
       procedure :: check_dims => result_set__check_dims
       final :: result_set__delete
@@ -115,18 +115,11 @@ contains
   type(DataFrame) function initialize__data_frame(field_count) result(data_frame)
     integer, intent(in) :: field_count
 
-    data_frame = DataFrame(null(), 0)  ! Needed because of gfortran bug
+    integer :: idx
+    data_frame = DataFrame(null(), field_count)
     allocate(data_frame%data_fields(field_count))
+
   end function initialize__data_frame
-
-
-  subroutine data_frame__add(self, data_field)
-    class(DataFrame), intent(inout) :: self
-    type(DataField), intent(in) :: data_field
-
-    self%field_count = self%field_count + 1
-    self%data_fields(self%field_count) = data_field
-  end subroutine data_frame__add
 
 
   function data_frame__field_for_node_named(self, name) result(field)
@@ -607,28 +600,13 @@ contains
   end function result_set__is_string
 
 
-  subroutine result_set__add(self, data_frame)
-    class(ResultSet), intent(inout) :: self
-    type(DataFrame), intent(in) :: data_frame
+  function result_set__next_data_frame(self) result(new_data_frame)
+    class(ResultSet), target, intent(inout) :: self
 
-    integer :: field_idx
-    type(DataField) :: field
+    type(DataFrame), pointer :: new_data_frame
+    type(DataFrame) :: data_frame
+    integer :: new_frame_idx
     type(DataFrame), allocatable :: tmp_data_frames(:)
-
-    if (.not. allocated(self%names)) then
-      allocate(self%names(size(data_frame%data_fields)))
-      allocate(self%field_widths(size(data_frame%data_fields)))
-      self%field_widths = 0
-      do field_idx = 1, size(data_frame%data_fields)
-        field = data_frame%data_fields(field_idx)
-        self%names(field_idx) = field%name
-      end do
-    end if
-
-    do field_idx = 1, size(data_frame%data_fields)
-      field = data_frame%data_fields(field_idx)
-      self%field_widths(field_idx) = max(size(field%data), self%field_widths(field_idx))
-    end do
 
     if (self%data_frames_size >= size(self%data_frames)) then
       allocate(tmp_data_frames(self%data_frames_size + DataFrameResizeSize))
@@ -637,9 +615,25 @@ contains
     end if
 
     self%data_frames_size = self%data_frames_size + 1
-    self%data_frames(self%data_frames_size) = data_frame
+    self%data_frames(self%data_frames_size) = DataFrame(size(self%names))
 
-  end subroutine result_set__add
+    new_data_frame => self%data_frames(self%data_frames_size)
+  end function result_set__next_data_frame
+
+
+  subroutine result_set__set_field_widths(self)
+    class(ResultSet), intent(inout) :: self
+
+    type(DataField) :: field
+
+    integer :: frame_idx, field_idx
+    do frame_idx = 1, self%data_frames_size
+      do field_idx = 1, size(self%data_frames(frame_idx)%data_fields)
+        field = self%data_frames(frame_idx)%data_fields(field_idx)
+        self%field_widths(field_idx) = max(size(field%data), self%field_widths(field_idx))
+      end do
+    end do
+  end subroutine
 
 
   subroutine result_set__check_dims(self, raw_dims, dims)

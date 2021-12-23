@@ -4,7 +4,7 @@ module modq_query_set
 
   type, public :: QuerySet
     private
-      type(String), allocatable :: names(:)
+      type(String), public, allocatable :: names(:)
       type(String), allocatable :: query_strs(:)
 
     contains
