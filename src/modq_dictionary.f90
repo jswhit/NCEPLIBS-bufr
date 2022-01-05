@@ -1,33 +1,8 @@
 
 module modq_dictionary
-    type, abstract :: ComparableObject
-    contains
-        procedure(equals_interface), pass(self), deferred :: equals_obj
-    end type ComparableObject
+    use modq_base_types
 
-    abstract interface
-        logical function equals_interface(self, other)
-            import
-            class(ComparableObject), intent(in) :: self
-            class(ComparableObject), intent(in) :: other
-        end function
-    end interface
-
-
-    type, abstract, extends(ComparableObject):: HashableObject
-    contains
-        procedure(hash_interface), pass(self), deferred :: hash
-    end type HashableObject
-
-    abstract interface
-        integer function hash_interface(self)
-            import
-            class(HashableObject), intent(in) :: self
-        end function
-    end interface
-
-
-    type :: LinkedList
+    type, private :: LinkedList
         type(Link), pointer :: head
         type(Link), pointer :: tail
         integer :: size
@@ -39,7 +14,7 @@ module modq_dictionary
     end type LinkedList
 
 
-    type :: KeyValuePair
+    type, private :: KeyValuePair
         class(HashableObject), allocatable :: key
         class(*), allocatable :: value
     end type KeyValuePair
@@ -69,6 +44,14 @@ module modq_dictionary
     interface Dict
         module procedure initialize_dict
     end interface Dict
+
+
+    type, extends(HashableObject) :: IntObject
+        integer :: value
+    contains
+        procedure, public :: equals_obj => int__equals_obj
+        procedure, public :: hash => int__hash
+    end type IntObject
 
 contains
 
@@ -177,9 +160,11 @@ contains
         class(HashableObject), intent(in) :: key
         class(*), intent(in) :: value
 
-        ! Add value for key
-        call self%divisions(mod(key%hash(), 128))%append(KeyValuePair(key, value))
-
+        if (.not. self%has(key)) then
+            call self%divisions(mod(key%hash(), 128))%append(KeyValuePair(key, value))
+        else
+            call bort("Key already exists in dictionary.")
+        end if
     end subroutine dict_add
 
 
@@ -203,4 +188,24 @@ contains
             call self%divisions(idx)%delete()
         end do
     end subroutine dict_delete
+
+
+    logical function int__equals_obj(self, other) result(equals)
+        class(IntObject), intent(in) :: self
+        class(ComparableObject), intent(in) :: other
+
+        select type(other)
+        type is (IntObject)
+            equals = (self%value == other%value)
+        class default
+            call bort("Wrong type found comparing integers.")
+        end select
+    end function int__equals_obj
+
+
+    integer function int__hash(self) result(hash)
+        class(IntObject), intent(in) :: self
+
+        hash = self%value
+    end function int__hash
 end module modq_dictionary

@@ -762,53 +762,40 @@ subroutine test_adpupa
 
 end subroutine test_adpupa
 
+
 subroutine test_dictionary
   use modq_string
   use modq_dictionary
   implicit none
 
   type(Dict) :: map
-  class(*), pointer :: result
-  type(LinkedList) :: list
-  type(KeyValuePair) :: pair
-
-!  map = Dict()
-
-!  call map%add(String("/"), String("root"))
-!  call map%add(String("/root/a"), String("a"))
-!
-!  result => map%get(String("/"))
-!  result => map%get(String("/root/a"))
-
-  pair = KeyValuePair(String("/"), String("root"))
-
-  list = LinkedList(null(), null(), 0)
-  call list%append(KeyValuePair(String("/"), String("root")))
-  call list%append(KeyValuePair(String("/abcd"), String("root2")))
-
-  result => list%get(String("/abcd"))
-
-  select type(result)
-  type is (String)
-    print *, result%chars()
-  class default
-    call bort("Wrong type in string equals.")
-  end select
-
-  call list%delete()
+  class(*), pointer :: result, result2
 
 
   map = Dict()
 
   call map%add(String("/"), String("root"))
-  call map%add(String("/root/a"), String("a"))
+  call map%add(String("/root/a"), 1)
 
   result => map%get(String("/"))
   result => map%get(String("/root/a"))
 
+
   select type(result)
   type is (String)
     print *, result%chars()
+  type is (integer)
+    print *, result
+    result = result + 1
+  class default
+    call bort("Wrong type in string equals.")
+  end select
+
+  result2 => map%get(String("/root/a"))
+
+  select type(result2)
+  type is (integer)
+    print *, result2
   class default
     call bort("Wrong type in string equals.")
   end select
