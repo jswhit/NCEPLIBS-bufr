@@ -1,13 +1,6 @@
 
 module modq_dictionary
-
-    type, abstract :: Object
-    !contains
-    !    procedure, pass, deferred :: init
-    end type Object
-
-
-    type, extends(Object), abstract :: ComparableObject
+    type, abstract :: ComparableObject
     contains
         procedure(equals_interface), pass(self), deferred :: equals_obj
     end type ComparableObject
@@ -34,7 +27,7 @@ module modq_dictionary
     end interface
 
 
-    type, extends(Object) :: LinkedList
+    type :: LinkedList
         type(Link), pointer :: head
         type(Link), pointer :: tail
         integer :: size
@@ -46,9 +39,9 @@ module modq_dictionary
     end type LinkedList
 
 
-    type, extends(Object) :: KeyValuePair
+    type :: KeyValuePair
         class(HashableObject), allocatable :: key
-        class(Object), allocatable :: value
+        class(*), allocatable :: value
     end type KeyValuePair
 
     interface KeyValuePair
@@ -56,13 +49,13 @@ module modq_dictionary
     end interface KeyValuePair
 
 
-    type, private, extends(Object) :: Link
+    type, private :: Link
         type(KeyValuePair) :: pair
         type(Link), pointer :: next
     end type Link
 
 
-    type, extends(Object) :: Dict
+    type :: Dict
         type(LinkedList), allocatable :: divisions(:)
         integer :: size
 
@@ -81,7 +74,7 @@ contains
 
     type(KeyValuePair) function initialize_keyvaluepair(key, value) result(pair)
         class(HashableObject), intent(in) :: key
-        class(Object), intent(in) :: value
+        class(*), intent(in) :: value
 
         pair = KeyValuePair(null(), null())
 
@@ -93,7 +86,7 @@ contains
     function list_get(self, key) result(obj)
         class(LinkedList), target, intent(in) :: self
         class(ComparableObject), intent(in) :: key
-        class(Object), pointer :: obj
+        class(*), pointer :: obj
         type(Link), pointer :: next_link
 
         class(HashableObject), pointer :: pair
@@ -171,7 +164,7 @@ contains
     function dict_get(self, key) result(value)
         class(Dict), target, intent(in) :: self
         class(HashableObject), intent(in) :: key
-        class(Object), pointer :: value
+        class(*), pointer :: value
 
         ! Get value for key
         value => self%divisions(mod(key%hash(), 128))%get(key)
@@ -182,7 +175,7 @@ contains
     subroutine dict_add(self, key, value)
         class(Dict), intent(inout) :: self
         class(HashableObject), intent(in) :: key
-        class(Object), intent(in) :: value
+        class(*), intent(in) :: value
 
         ! Add value for key
         call self%divisions(mod(key%hash(), 128))%append(KeyValuePair(key, value))
@@ -199,6 +192,7 @@ contains
         has = associated(self%divisions(mod(key%hash(), 128))%get(key))
     end function dict_has
 
+
     subroutine dict_delete(self)
         class(Dict), intent(inout) :: self
 
@@ -210,8 +204,3 @@ contains
         end do
     end subroutine dict_delete
 end module modq_dictionary
-
-
-!procedure, public :: init_dict(size)
-!    allocate(dictionary%pairs(size))
-!end procedure
