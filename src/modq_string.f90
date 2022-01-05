@@ -13,7 +13,11 @@
 !>
 
 module modq_string
-  type String
+  use modq_dictionary
+
+  implicit none
+
+  type, extends(HashableObject) :: String
     character(len=:), allocatable :: char_buffer
 
   contains
@@ -24,6 +28,9 @@ module modq_string
 !    generic, public :: assignment(=) => string__copy
     procedure :: string__equals
     generic, public :: operator(==) => string__equals
+    procedure :: equals_obj => string__equals_obj
+    procedure :: hash => string__hash
+
     final :: string__delete
   end type String
 
@@ -110,6 +117,48 @@ contains
 
     are_equal = (self%char_buffer == other%char_buffer)
   end function string__equals
+
+
+  !> @author Ronald Mclaren
+  !> @date 2021-05-26
+  !>
+  !> @brief Check if strings are equal
+  logical function string__equals_obj(self, other) result(are_equal)
+    class(String), intent(in) :: self
+    class(ComparableObject), intent(in) :: other
+
+    type(String), pointer :: other_str
+
+    select type(other)
+      type is (String)
+        other_str => other
+      class default
+        call bort("Wrong type in string equals.")
+    end select
+
+    are_equal = (self%char_buffer == other_str%char_buffer)
+  end function string__equals_obj
+
+
+  !> @author Ronald Mclaren
+  !> @date 2022-01-03
+  !>
+  !> @brief Get the hash of the string
+  !> @param[in] self - class(String): The string instance
+  !> @return hash - integer: The hash of the string
+  !>
+  integer function string__hash(self) result(hash_value)
+    class(String), intent(in) :: self
+
+    integer :: char_idx
+
+    ! Bernstein djb2 hash function
+    hash_value = 5381
+    do char_idx = 1, len(self%char_buffer)
+      hash_value = (ishft(hash_value, 5) + hash_value) + ichar(self%char_buffer(char_idx:char_idx))
+    end do
+  end function string__hash
+
 
   !> @author Ronald Mclaren
   !> @date 2021-05-26
