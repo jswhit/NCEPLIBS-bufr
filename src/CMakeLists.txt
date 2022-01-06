@@ -35,7 +35,7 @@ list(APPEND fortran_src
   wrtree.f wtstat.f arallocf.F ardllocf.F closbf.F ireadmt.F irev.F isetprm.F openbf.F pkvs01.F
   wrdlen.F query_interface.f90 fortran_open.f90 fortran_close.f90 bufr_interface.f90 modq_list.f90
   modq_string.f90 modq_query_parser.f90 modq_query.F90 modq_result_set.f90 modq_query_set.f90
-  modq_execute.f90 modq_table.f90)
+  modq_execute.f90 modq_table.f90 modq_dictionary.f90 modq_base_types.f90)
 
 list(APPEND c_src
   arallocc.c ardllocc.c bort_exit.c ccbfl.c cmpia.c cmpstia1.c cmpstia2.c cobfl.c cpmstabs.c

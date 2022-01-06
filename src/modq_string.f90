@@ -13,7 +13,7 @@
 !>
 
 module modq_string
-  use modq_dictionary
+  use modq_base_types
 
   implicit none
 
