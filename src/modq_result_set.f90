@@ -504,7 +504,8 @@ contains
 
       all_dims = dims_list%array()
 
-      if (present(group_by) .and. group_by /= "") then
+
+      if (groupby_idx > 1) then  ! if group_by field is present and relevant
         ! The groupby field occurs at the same or greater repetition level as the target field.
         if (groupby_idx > dims_list%length()) then
           allocate(dims(1))
