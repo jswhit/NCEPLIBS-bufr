@@ -220,7 +220,7 @@ contains
     dims = raw_dims
   
     allocate(data(dims(1), dims(2)))
-    data = reshape(raw_data, dims)
+    data = reshape(raw_data, dims, order=[2,1])
   end function
   
   
@@ -239,7 +239,7 @@ contains
     dims = raw_dims
   
     allocate(data(dims(1), dims(2), dims(3)))
-    data = reshape(raw_data, dims)
+    data = reshape(raw_data, dims, order=[3, 2, 1])
   end function
   
   
@@ -258,7 +258,7 @@ contains
     dims = raw_dims
   
     allocate(data(dims(1), dims(2), dims(3), dims(4)))
-    data = reshape(raw_data, dims)
+    data = reshape(raw_data, dims, order=[4, 3, 2, 1])
   end function
 
 
@@ -356,9 +356,9 @@ contains
         do insert_idx = 1, size(inserts(dim_idx, :))
           num_inserts = inserts(dim_idx, insert_idx)
           if (num_inserts > 0) then
-            data_idx = product(dims(dim_idx:)) * insert_idx + product(dims(dim_idx:)) - num_inserts
+            data_idx = product(dims(dim_idx:)) * (insert_idx - 1) + product(dims(dim_idx:)) - num_inserts
 
-            where (idxs >= data_idx)
+            where (idxs > data_idx)
               idxs = idxs + num_inserts
             end where
           end if
