@@ -520,12 +520,17 @@ contains
           dims(2:size(dims)) = all_dims(groupby_idx+1:size(all_dims))
           export_dims = export_dims - groupby_idx + 1
 
-          tmp_export_dims = [1]
+          allocate(tmp_export_dims(0))
           do export_idx = 1, size(export_dims)
             if (export_dims(export_idx) > 0) then
               tmp_export_dims = [tmp_export_dims, export_dims(export_idx)]
             end if
           end do
+
+          if (tmp_export_dims(1) /= 1) then
+            tmp_export_dims = [1, tmp_export_dims]
+          end if
+
           export_dims = tmp_export_dims
         end if
       ! There is no groupby field. So use all the dimensions.
