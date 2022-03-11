@@ -504,6 +504,12 @@ contains
 
       all_dims = dims_list%array()
 
+      ! If there is absolutley no data for a field you will have the problem were the
+      ! size of the last dimension is zero. We need to have at least 1 element to make room
+      ! for the missing value. This if statement makes sure there is at least 1 element.
+      if (all_dims(size(all_dims)) == 0) then
+        all_dims(size(all_dims)) = max(1, all_dims(size(all_dims)))
+      end if
 
       if (groupby_idx > 1) then  ! if group_by field is present and relevant
         ! The groupby field occurs at the same or greater repetition level as the target field.
