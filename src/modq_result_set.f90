@@ -428,7 +428,7 @@ contains
     ! Find the dims based on the largest sequence counts in the fields
     block  ! Compute dims
       integer :: frame_idx
-      integer :: cnt_idx, export_idx
+      integer :: cnt_idx, export_idx, dim_idx
       integer :: dims_len
       type(IntList) :: dims_list
       integer, allocatable :: tmp_export_dims(:)
@@ -505,11 +505,14 @@ contains
       all_dims = dims_list%array()
 
       ! If there is absolutley no data for a field you will have the problem were the
-      ! size of the last dimension is zero. We need to have at least 1 element to make room
-      ! for the missing value. This if statement makes sure there is at least 1 element.
-      if (all_dims(size(all_dims)) == 0) then
-        all_dims(size(all_dims)) = max(1, all_dims(size(all_dims)))
-      end if
+      ! size of some dimensions are zero. We need to have at least 1 element in each
+      ! dimension to make room for the missing value. This if statement makes sure there
+      ! is at least 1 element in each dimension.
+      do dim_idx = 1, size(all_dims)
+        if (all_dims(dim_idx) == 0) then
+          all_dims(dim_idx) = 1
+        end if
+      end do
 
       if (groupby_idx > 1) then  ! if group_by field is present and relevant
         ! The groupby field occurs at the same or greater repetition level as the target field.
