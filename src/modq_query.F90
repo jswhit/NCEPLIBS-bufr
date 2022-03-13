@@ -330,12 +330,10 @@ contains
               do rewind_idx = seq_path%length(), path_idx + 1, -1
                 ! Exit the sequence
 
-                ! If this is a query node, we need to update the query string.
+                ! If this is a query node, we need to update the query index.
                 if (is_query_node(seq_path%at(rewind_idx) - 1)) then
                   if (mnemonic_cursor > 0 .and. table_cursor == mnemonic_cursor) then
-                    if (link(branches(mnemonic_cursor)) == node_idx) then
-                      mnemonic_cursor = mnemonic_cursor - 1
-                    end if
+                    mnemonic_cursor = mnemonic_cursor - 1
                   end if
 
                   table_cursor = table_cursor - 1
