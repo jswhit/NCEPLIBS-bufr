@@ -6,15 +6,17 @@ that have no expiration period specified.
 see https://www.nco.ncep.noaa.gov/pmb/docs/restricted_data
 and https://www.nco.ncep.noaa.gov/pmb/docs/restricted_data/mesonet
 
-filter_restricted_data <input bufr> <output bufr>
+filter_restricted_data <input bufr> <output bufr> 
+
+option args:  --maxlenout <max output bufr msg size in bytes> --verbose
 """
-from __future__ import print_function
 import ncepbufr, argparse, os
 
 # Parse command line args
 ap = argparse.ArgumentParser()
 ap.add_argument("bufr_in", help="input BUFR file")
 ap.add_argument("bufr_out", help="output BUFR file without restricted data")
+ap.add_argument('--maxlenout', type=int, default=-1, help='optional max output bufr msg size in bytes')
 ap.add_argument('--verbose', '-v', action='store_true')
 MyArgs = ap.parse_args()
 
@@ -27,6 +29,12 @@ bufrin = ncepbufr.open(MyArgs.bufr_in)
 
 # open output bufr file using same bufr table.
 bufrout = ncepbufr.open(MyArgs.bufr_out,'w',bufrin)
+
+if MyArgs.maxlenout > 0:
+    # set max output bufr message size (in bytes)
+    if MyArgs.verbose:
+        print('setting max output bufr msg size to %s bytes' % MyArgs.maxlenout)
+    ncepbufr.set_outputmessage_maxlen(MyArgs.maxlenout)
 
 # mnemonic to extract data from subset headers.
 hdstr='RSRD EXPRSRD TYP'
