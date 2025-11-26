@@ -8,7 +8,7 @@ and https://www.nco.ncep.noaa.gov/pmb/docs/restricted_data/mesonet
 
 filter_restricted_data <input bufr> <output bufr> 
 
-option args:  --maxlenout <max output bufr msg size in bytes> --verbose
+option args:  --maxlenout <max output bufr msg size in bytes> --skiptypes <OBTYPE1> <OBTYPE2>... --verbose
 """
 import ncepbufr, argparse, os
 
@@ -17,12 +17,18 @@ ap = argparse.ArgumentParser()
 ap.add_argument("bufr_in", help="input BUFR file")
 ap.add_argument("bufr_out", help="output BUFR file without restricted data")
 ap.add_argument('--maxlenout', type=int, default=-1, help='optional max output bufr msg size in bytes')
+ap.add_argument('--skiptypes', type=int, nargs='+',required=False, help='prepbufr types to skip')
 ap.add_argument('--verbose', '-v', action='store_true')
 MyArgs = ap.parse_args()
 
 # input and output file names from command line args.
 if MyArgs.bufr_in == MyArgs.bufr_out:
     raise IOError('cannot overwrite input bufr file')
+
+if MyArgs.skiptypes is not None:
+    skiptypes = MyArgs.skiptypes
+else:
+    skiptypes = []
 
 # open bufr input file.
 bufrin = ncepbufr.open(MyArgs.bufr_in)
@@ -61,7 +67,7 @@ while bufrin.advance() == 0: # loop over messages.
 # exprsrd - expiration of restriction (hours)
         rs_bitstring =  "{:09b}".format(rsrd)
         # skip restricted data with no expiration time
-        if rsrd != 0 and exprsrd == 0 : 
+        if rsrd != 0 and exprsrd == 0 and typ not in skiptypes: 
             nskip += 1
             if MyArgs.verbose:
                 if typ !=0: # bufr has ob type code (prepbufr)
